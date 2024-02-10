@@ -10,6 +10,49 @@ namespace titledbConverter.Services;
 
 public class TitleDbService(IDbService dbService) : ITitleDbService
 {
+    private ConcurrentDictionary<string, ConcurrentDictionary<string, TitleDbCnmt>> _concurrentCnmts = default!;
+    private ConcurrentDictionary<string, TitleDbVersions> _concurrentVersions = default!;
+    private bool _isCnmtsLoaded = false;
+    private bool _isVersionsLoaded = false;
+
+    private async Task<ConcurrentDictionary<string, ConcurrentDictionary<string, TitleDbCnmt>>> LoadCnmtsJsonFilesAsync(string fileLocation)
+    {
+        if (_isCnmtsLoaded) return _concurrentCnmts;
+        
+        AnsiConsole.MarkupLine($"[springgreen3_1]Loading Cnmts...[/]");
+        await using (var stream = File.OpenRead(fileLocation))
+        {
+            var cnmts = await JsonSerializer.DeserializeAsync<Dictionary<string, Dictionary<string, TitleDbCnmt>>>(stream);
+            _concurrentCnmts = new ConcurrentDictionary<string, ConcurrentDictionary<string, TitleDbCnmt>>(
+                cnmts.ToDictionary(
+                    kvp => kvp.Key.ToUpper(), 
+                    kvp => new ConcurrentDictionary<string, TitleDbCnmt>(kvp.Value)
+                )
+            );
+        }   
+        _isCnmtsLoaded = true;
+        return _concurrentCnmts;
+    }
+    
+    private async Task<ConcurrentDictionary<string, TitleDbVersions>> LoadVersionsJsonFilesAsync(string fileLocation)
+    {
+        if (_isVersionsLoaded) return _concurrentVersions;
+        
+        AnsiConsole.MarkupLine($"[springgreen3_1]Loading Versions...[/]");
+        await using (var stream = File.OpenRead(fileLocation))
+        {
+            var versions = await JsonSerializer.DeserializeAsync<Dictionary<string, TitleDbVersions>>(stream);
+            _concurrentVersions = new ConcurrentDictionary<string, TitleDbVersions>(
+                versions.ToDictionary(
+                    kvp => kvp.Key.ToUpper(), 
+                    kvp => kvp.Value
+                )
+            );
+        }   
+        _isVersionsLoaded = true;
+        return _concurrentVersions;
+    } 
+
     public async Task ImportRegionAsync(string regionFile)
     {
         AnsiConsole.MarkupLineInterpolated($"[bold green]Processing {regionFile}[/]");
@@ -17,9 +60,13 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
 
         Dictionary<string, TitleDbTitle> games;
         //Dictionary<string, TitleDbVersions> versions;
-        ConcurrentDictionary<string, ConcurrentDictionary<string, TitleDbCnmt>> concurrentCnmts;
-        ConcurrentDictionary<string, TitleDbVersions> concurrentVersions;
+        //ConcurrentDictionary<string, ConcurrentDictionary<string, TitleDbCnmt>> concurrentCnmts;
+        //ConcurrentDictionary<string, TitleDbVersions> concurrentVersions;
+        var directory = Path.GetDirectoryName(regionFile);
+        var concurrentCnmts = await LoadCnmtsJsonFilesAsync(Path.Join(directory, "cnmts.json"));
+        var  concurrentVersions = await LoadVersionsJsonFilesAsync(Path.Join(directory, "versions.json"));
         
+       /* 
         AnsiConsole.MarkupLine($"[springgreen3_1]Loading Versions...[/]");
         await using (var stream = File.OpenRead("I:\\titledb\\versions.json"))
         {
@@ -31,7 +78,6 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
                 )
             );
         } 
-        
         AnsiConsole.MarkupLine($"[springgreen3_1]Loading Cnmts...[/]");
         await using (var stream = File.OpenRead("I:\\titledb\\cnmts.json"))
         {
@@ -43,7 +89,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
                 )
             );
         } 
-        
+       */ 
         AnsiConsole.MarkupLine($"[springgreen3_1]Loading Titles...[/]");
         await using (var stream = File.OpenRead(regionFile))
         {
@@ -117,6 +163,16 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     
         //var json = await File.ReadAllTextAsync(regionFile);
         //var games = JsonSerializer.Deserialize<Dictionary<string, TitleDbTitle>>(json);
-        var pepa = "hola";
+    }
+
+    public Task ImportCnmtsAsync(string cnmtsFile)
+    {
+       var cnmts = LoadCnmtsJsonFilesAsync(cnmtsFile);
+       return Task.CompletedTask; 
+    }
+
+    public Task ImportVersionsAsync(string versionsFile)
+    {
+        throw new NotImplementedException();
     }
 }

@@ -38,6 +38,13 @@ public sealed class ConvertToSql : AsyncCommand<ConvertToSql.Settings>
         var regionFile = Path.Join(settings.DownloadPath, "US.en.json");
         //var regionFile = Path.Join(settings.DownloadPath, "ivan.json");
         await _titleDbService.ImportRegionAsync(regionFile);
+        /*
+        var cnmtFile = Path.Join(settings.DownloadPath, "cnmts.json");
+        await _titleDbService.ImportCnmtsAsync(cnmtFile);
+        
+        var versionsFile = Path.Join(settings.DownloadPath, "versions.json");
+        await _titleDbService.ImportCnmtsAsync(versionsFile);
+        */
         stopwatch.Stop();
         Console.WriteLine($"Elapsed time: {stopwatch.Elapsed.TotalMilliseconds} ms");
 
