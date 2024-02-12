@@ -1,38 +1,87 @@
 ﻿using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.Options;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using titledbConverter.Settings;
+using ValidationResult = Spectre.Console.ValidationResult;
 
 namespace titledbConverter.Commands;
 
-public sealed class DownloadCommand(HttpClient httpClient) : AsyncCommand<DownloadCommand.Settings>
+public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
 {
+    private readonly IOptions<AppSettings> _configuration;
+    private readonly HttpClient _httpClient;
+    private Uri _baseUri = default!;
+    
+    public DownloadCommand(HttpClient httpClient, IOptions<AppSettings> configuration)
+    {
+        _configuration = configuration;
+        _httpClient = httpClient;
+    }
+
     public sealed class Settings : CommandSettings
     {
        
         [CommandArgument(0, "[location]")]
         [Description("Specify folder where to save the files")]
-        public string? DownloadPath { get; init; }
+        public string? DownloadPath { get; set; }
+        
+        [CommandOption("-u|--url")]
+        [Description("Specify the base url to download the files")]
+        public string? BaseUrl { get; set; }
     }
     
     public override ValidationResult Validate(CommandContext context, Settings settings)
     {
         if (string.IsNullOrWhiteSpace(settings.DownloadPath))
         {
-            return ValidationResult.Error("Download path cannot be empty");
+            settings.DownloadPath ??= _configuration.Value.DownloadPath;
+            AnsiConsole.MarkupLine($"Using default download location {settings.DownloadPath}");
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.BaseUrl))
+        {
+            settings.BaseUrl ??= _configuration.Value.BaseUrl;
+            _baseUri = new Uri(settings.BaseUrl);
+            AnsiConsole.MarkupLine($"Using default config base url {settings.BaseUrl}");
+
         }
         
         return !Directory.Exists((settings.DownloadPath)) ? 
             ValidationResult.Error($"Path not found - {settings.DownloadPath}") : base.Validate(context, settings);
+
+    }
+
+    private async Task<Dictionary<string, List<string>>?> GetRegions(Settings settings)
+    {
+        var jsonString = await _httpClient.GetStringAsync(new Uri(_baseUri, "languages.json"));
+        var countryLanguages = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(jsonString);
+        AnsiConsole.MarkupLine($"[u]{countryLanguages.Count}[/] regions found.");
+        await File.WriteAllBytesAsync(settings.DownloadPath + "/languages.json", Encoding.UTF8.GetBytes(jsonString));
+        return countryLanguages;        
     }
     
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
     {
-        var items = new (string name, string url)[]
+        var regions = await GetRegions(settings);
+        var items = new List<(string name, string url)>
         {
-            ("US", "https://github.com/blawar/titledb/raw/master/US.en.json"),
-            ("cnmts", "https://github.com/blawar/titledb/raw/master/cnmts.json"),
-            ("versions", "https://raw.githubusercontent.com/blawar/titledb/master/versions.json"),
+            ("cnmts.json", new Uri(_baseUri, "cnmts.json").ToString()),
+            ("versions.json", new Uri(_baseUri, "versions.json").ToString()),
         };
+        
+        foreach (var (key, value) in regions)
+        {
+            foreach (var lang in value)
+            {
+                var name = $"{key}.{lang}.json";
+                var url = new Uri(_baseUri, name);
+                items.Add((name, url.ToString()));
+            }
+        }
 
         await AnsiConsole.Progress()
             .Columns(
@@ -53,7 +102,7 @@ public sealed class DownloadCommand(HttpClient httpClient) : AsyncCommand<Downlo
         try
         {
             using var response =
-                await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+                await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
             response.EnsureSuccessStatusCode();
 
             task.MaxValue(response.Content.Headers.ContentLength ?? 0);

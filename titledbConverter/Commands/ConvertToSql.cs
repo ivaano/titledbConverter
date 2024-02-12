@@ -35,9 +35,10 @@ public sealed class ConvertToSql : AsyncCommand<ConvertToSql.Settings>
         var stopwatch = Stopwatch.StartNew();
 
         settings.DownloadPath ??= _configuration.Value.DownloadPath;
-        var regionFile = Path.Join(settings.DownloadPath, "US.en.json");
+        //var regionFile = Path.Join(settings.DownloadPath, "US.en.json");
         //var regionFile = Path.Join(settings.DownloadPath, "ivan.json");
-        await _titleDbService.ImportRegionAsync(regionFile);
+        //await _titleDbService.ImportRegionAsync(regionFile);
+        await _titleDbService.ImportAllRegionsAsync(settings.DownloadPath);
         /*
         var cnmtFile = Path.Join(settings.DownloadPath, "cnmts.json");
         await _titleDbService.ImportCnmtsAsync(cnmtFile);
