@@ -13,6 +13,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
 {
     private ConcurrentDictionary<string, ConcurrentDictionary<string, TitleDbCnmt>> _concurrentCnmts = default!;
     private ConcurrentDictionary<string, TitleDbVersions> _concurrentVersions = default!;
+    private ConcurrentDictionary<string, List<string>> _regionLanguages = default!;
     private Dictionary<string, TitleDbTitle> _regionTitles = default!;
     private ConcurrentDictionary<long, Lazy<Title>> _lazyDict = [];
     private ConcurrentBag<Title> _titles = [];
@@ -61,22 +62,21 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         _isVersionsLoaded = true;
         return _concurrentVersions;
     }
-
-    private async Task<Dictionary<string, TitleDbTitle>> LoadTitlesJsonFilesAsync(string fileLocation)
+    
+    private async Task<ConcurrentDictionary<string, List<string>>> LoadRegionLanguagesAsync(string fileLocation)
     {
-        if (_isTitlesLoaded) return _regionTitles;
         var stopwatch = Stopwatch.StartNew();
         await using (var stream = File.OpenRead(fileLocation))
         {
-            _regionTitles = await JsonSerializer.DeserializeAsync<Dictionary<string, TitleDbTitle>>(stream) ??
-                      throw new InvalidOperationException();
+            var countryLanguages = await JsonSerializer.DeserializeAsync<Dictionary<string, List<string>>>(stream);
+            _regionLanguages = new ConcurrentDictionary<string, List<string>>(countryLanguages);
         }
         stopwatch.Stop();
         AnsiConsole.MarkupLine($"[springgreen3_1]Loaded {fileLocation} in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
-        _isTitlesLoaded = true;
-        return _regionTitles;
+        return _regionLanguages;
     }
-    
+
+   
     private async Task<Dictionary<string, TitleDbTitle>> GetTitlesJsonFilesAsync(string fileLocation)
     {
         Dictionary<string, TitleDbTitle> titles;
@@ -95,20 +95,16 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     {
         //var files = Directory.GetFiles(regionFolder, "*.json");
         await Task.WhenAll(
-            //LoadTitlesJsonFilesAsync(regionFile),
+            LoadRegionLanguagesAsync(Path.Join(regionFolder, "languages.json")),
             LoadCnmtsJsonFilesAsync(Path.Join(regionFolder, "cnmts.json")),
             LoadVersionsJsonFilesAsync(Path.Join(regionFolder, "versions.json")));
-        
-        var jsonString = await File.ReadAllTextAsync(Path.Join(regionFolder, "languages.json"));
-        var countryLanguages = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(jsonString);
-        
+
         var files = new List<string>();
-        foreach (var (key, value) in countryLanguages)
+        foreach (var (key, value) in _regionLanguages)
         {
             files.AddRange(value.Select(lang => Path.Join(regionFolder, $"{key}.{lang}.json")));
         }
         
-        //string[] files = [Path.Join(regionFolder, "US.en.json"), Path.Join(regionFolder, "MX.en.json")];
         await Task.WhenAll(files.Select(ImportRegionAsync));
         var peta = _lazyDict.Values.Select(x => x.Value).ToList();
         await dbService.BulkInsertTitlesAsync(peta);
