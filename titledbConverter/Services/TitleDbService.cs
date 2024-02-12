@@ -5,6 +5,7 @@ using Spectre.Console;
 using titledbConverter.Models;
 using titledbConverter.Models.Dto;
 using titledbConverter.Services.Interface;
+using titledbConverter.Utils;
 using Version = titledbConverter.Models.Version;
 
 namespace titledbConverter.Services;
@@ -14,6 +15,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     private ConcurrentDictionary<string, ConcurrentDictionary<string, TitleDbCnmt>> _concurrentCnmts = default!;
     private ConcurrentDictionary<string, TitleDbVersions> _concurrentVersions = default!;
     private ConcurrentDictionary<string, List<string>> _regionLanguages = default!;
+    private ConcurrentDictionary<string, List<RegionLanguage>> _regionLanguagesDefault = default!;
     private Dictionary<string, TitleDbTitle> _regionTitles = default!;
     private ConcurrentDictionary<long, Lazy<Title>> _lazyDict = [];
     private ConcurrentBag<Title> _titles = [];
@@ -63,7 +65,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         return _concurrentVersions;
     }
     
-    private async Task<ConcurrentDictionary<string, List<string>>> LoadRegionLanguagesAsync(string fileLocation)
+    private async Task<ConcurrentDictionary<string, List<string>>> LoadRegionLanguagesAsync(string fileLocation, string preferredRegion, string preferredLanguage)
     {
         var stopwatch = Stopwatch.StartNew();
         await using (var stream = File.OpenRead(fileLocation))
@@ -71,6 +73,19 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
             var countryLanguages = await JsonSerializer.DeserializeAsync<Dictionary<string, List<string>>>(stream);
             _regionLanguages = new ConcurrentDictionary<string, List<string>>(countryLanguages);
         }
+        var regionList = new List<RegionLanguage>();
+        foreach (var (key, value) in _regionLanguages)
+        {
+            regionList.Add(new RegionLanguage
+            {
+                Region = key,
+                Language = value.First(),
+                PreferredRegion = preferredRegion,
+                PreferredLanguage = preferredLanguage
+            });
+            //files.AddRange(value.Select(lang => Path.Join(regionFolder, $"{key}.{lang}.json")));
+        }
+        
         stopwatch.Stop();
         AnsiConsole.MarkupLine($"[springgreen3_1]Loaded {fileLocation} in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
         return _regionLanguages;
@@ -95,7 +110,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     {
         //var files = Directory.GetFiles(regionFolder, "*.json");
         await Task.WhenAll(
-            LoadRegionLanguagesAsync(Path.Join(regionFolder, "languages.json")),
+            LoadRegionLanguagesAsync(Path.Join(regionFolder, "languages.json"), "US", "en"),
             LoadCnmtsJsonFilesAsync(Path.Join(regionFolder, "cnmts.json")),
             LoadVersionsJsonFilesAsync(Path.Join(regionFolder, "versions.json")));
 
