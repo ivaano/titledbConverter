@@ -2,10 +2,12 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Spectre.Console;
+using titledbConverter.Commands;
 using titledbConverter.Models;
 using titledbConverter.Models.Dto;
 using titledbConverter.Services.Interface;
 using titledbConverter.Utils;
+using Region = titledbConverter.Models.Region;
 using Version = titledbConverter.Models.Version;
 
 namespace titledbConverter.Services;
@@ -15,13 +17,16 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     private ConcurrentDictionary<string, ConcurrentDictionary<string, TitleDbCnmt>> _concurrentCnmts = default!;
     private ConcurrentDictionary<string, TitleDbVersions> _concurrentVersions = default!;
     private ConcurrentDictionary<string, List<string>> _regionLanguages = default!;
-    private ConcurrentDictionary<string, List<RegionLanguage>> _regionLanguagesDefault = default!;
+    //private ConcurrentDictionary<string, List<RegionLanguage>> _regionLanguagesDefault = default!;
+    private ConcurrentBag<RegionLanguage> _regionLanguagesDefault = default!;
     private Dictionary<string, TitleDbTitle> _regionTitles = default!;
     private ConcurrentDictionary<long, Lazy<Title>> _lazyDict = [];
     private ConcurrentBag<Title> _titles = [];
+    private ConcurrentBag<Region> _regions = [];
     private bool _isCnmtsLoaded = false;
     private bool _isVersionsLoaded = false;
     private bool _isTitlesLoaded = false;
+    //private 
 
     private async Task<ConcurrentDictionary<string, ConcurrentDictionary<string, TitleDbCnmt>>> LoadCnmtsJsonFilesAsync(
         string fileLocation)
@@ -68,37 +73,32 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     private async Task<ConcurrentDictionary<string, List<string>>> LoadRegionLanguagesAsync(string fileLocation, string preferredRegion, string preferredLanguage)
     {
         var stopwatch = Stopwatch.StartNew();
-        await using (var stream = File.OpenRead(fileLocation))
-        {
-            var countryLanguages = await JsonSerializer.DeserializeAsync<Dictionary<string, List<string>>>(stream);
-            _regionLanguages = new ConcurrentDictionary<string, List<string>>(countryLanguages);
-        }
-        var regionList = new List<RegionLanguage>();
-        foreach (var (key, value) in _regionLanguages)
-        {
-            regionList.Add(new RegionLanguage
+        var countryLanguages = await File.ReadAllTextAsync(fileLocation)
+            .ContinueWith(fileContent => JsonSerializer.Deserialize<Dictionary<string, List<string>>>(fileContent.Result));
+        _regionLanguages = new ConcurrentDictionary<string, List<string>>(countryLanguages);
+
+        _regionLanguagesDefault = new ConcurrentBag<RegionLanguage>(_regionLanguages
+            .SelectMany(pair => pair.Value.Select(lang => new RegionLanguage
             {
-                Region = key,
-                Language = value.First(),
+                Region = pair.Key,
+                Language = lang,
                 PreferredRegion = preferredRegion,
                 PreferredLanguage = preferredLanguage
-            });
-            //files.AddRange(value.Select(lang => Path.Join(regionFolder, $"{key}.{lang}.json")));
-        }
-        
+            })));
+
         stopwatch.Stop();
         AnsiConsole.MarkupLine($"[springgreen3_1]Loaded {fileLocation} in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
         return _regionLanguages;
     }
 
    
-    private async Task<Dictionary<string, TitleDbTitle>> GetTitlesJsonFilesAsync(string fileLocation)
+    private static async Task<SortedDictionary<string, TitleDbTitle>> GetTitlesJsonFilesAsync(string fileLocation)
     {
-        Dictionary<string, TitleDbTitle> titles;
+        SortedDictionary<string, TitleDbTitle> titles;
         var stopwatch = Stopwatch.StartNew();
         await using (var stream = File.OpenRead(fileLocation))
         {
-            titles = await JsonSerializer.DeserializeAsync<Dictionary<string, TitleDbTitle>>(stream) ??
+            titles = await JsonSerializer.DeserializeAsync<SortedDictionary<string, TitleDbTitle>>(stream) ??
                      throw new InvalidOperationException();
         }
         stopwatch.Stop();
@@ -106,27 +106,21 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         return titles;
     }
     
-    public async Task ImportAllRegionsAsync(string regionFolder)
+    public async Task ImportAllRegionsAsync(ConvertToSql.Settings settings)
     {
-        //var files = Directory.GetFiles(regionFolder, "*.json");
         await Task.WhenAll(
-            LoadRegionLanguagesAsync(Path.Join(regionFolder, "languages.json"), "US", "en"),
-            LoadCnmtsJsonFilesAsync(Path.Join(regionFolder, "cnmts.json")),
-            LoadVersionsJsonFilesAsync(Path.Join(regionFolder, "versions.json")));
+            LoadRegionLanguagesAsync(Path.Join(settings.DownloadPath, "languages.json"), settings.Region, settings.Language),
+            LoadCnmtsJsonFilesAsync(Path.Join(settings.DownloadPath, "cnmts.json")),
+            LoadVersionsJsonFilesAsync(Path.Join(settings.DownloadPath, "versions.json")));
 
-        var files = new List<string>();
-        foreach (var (key, value) in _regionLanguages)
-        {
-            files.AddRange(value.Select(lang => Path.Join(regionFolder, $"{key}.{lang}.json")));
-        }
-        
-        await Task.WhenAll(files.Select(ImportRegionAsync));
+
+        await Task.WhenAll(_regionLanguagesDefault.Select(region => ImportRegionAsync(region, settings.DownloadPath)));
         var peta = _lazyDict.Values.Select(x => x.Value).ToList();
         await dbService.BulkInsertTitlesAsync(peta);
         //await dbService.BulkInsertTitlesAsync(_titles.ToList());
     }
 
-    private void ProcessTitle(KeyValuePair<string, TitleDbTitle> game)
+    private Title ImportTitle(KeyValuePair<string, TitleDbTitle> game)
     {
         var title = new Title
         {
@@ -188,27 +182,47 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
                 }
             }
         }
-        /*
-        if (_lazyDict.ContainsKey(game.Value.NsuId))
-        {
-            _lazyDict[game.Value.NsuId] = new Lazy<Title>(() => title);
-        }
-        else
-        {
-            _lazyDict.TryAdd(game.Value.NsuId, new Lazy<Title>(() => title));
-        }
-        */
-        _lazyDict.GetOrAdd(game.Value.NsuId, new Lazy<Title>(() => title));
-        //_titles.Add(title);
+
+        return title;
     }
 
-    public async Task ImportRegionAsync(string regionFile)
+    private void ProcessTitle(KeyValuePair<string, TitleDbTitle> game, RegionLanguage regionLanguage)
     {
+        if (string.IsNullOrEmpty(game.Value.Id)) return;
+        
+        if (regionLanguage.Region == regionLanguage.PreferredRegion && regionLanguage.Language == regionLanguage.PreferredLanguage)
+        {
+            var title = ImportTitle(game);
+            title.Region = regionLanguage.Region;
+            title.Regions = [_regions.First(r => r.Name == regionLanguage.Region)];
+            _lazyDict.GetOrAdd(game.Value.NsuId, new Lazy<Title>(() => title));
+        }
+        else if (regionLanguage.Language == regionLanguage.PreferredLanguage)
+        {
+            //Add region to title
+            if (_lazyDict.TryGetValue(game.Value.NsuId, out var value))
+            {
+                var title = value.Value;
+                title.TitleName = game.Value.Name;
+            }
+            else
+            {
+                var title = ImportTitle(game);
+                _lazyDict.GetOrAdd(game.Value.NsuId, new Lazy<Title>(() => title));
+            }
+        }
+    }
+
+    private async Task ImportRegionAsync(RegionLanguage regionLanguage, string downloadPath)
+    {
+        var regions = dbService.GetRegions();
+        _regions = new ConcurrentBag<Region>(regions);
+        var regionFile = Path.Join(downloadPath, $"{regionLanguage.Region}.{regionLanguage.Language}.json");
         AnsiConsole.MarkupLineInterpolated($"[bold green]Processing {regionFile}[/]");
         var regionTitles = await GetTitlesJsonFilesAsync(regionFile);
         var options = new ParallelOptions { MaxDegreeOfParallelism = 2 };
 
-        Parallel.ForEach(regionTitles, options, ProcessTitle);
+        Parallel.ForEach(regionTitles, options, kvp => ProcessTitle(kvp, regionLanguage));
 
         //titles.Clear();
         AnsiConsole.MarkupLine($"[lightslateblue]Title Count for {regionFile}: {regionTitles.Count}[/]");

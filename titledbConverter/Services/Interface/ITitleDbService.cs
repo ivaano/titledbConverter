@@ -1,10 +1,12 @@
-﻿namespace titledbConverter.Services.Interface;
+﻿using titledbConverter.Commands;
+
+namespace titledbConverter.Services.Interface;
 
 public interface ITitleDbService
 {
-    public Task ImportRegionAsync(string regionFile);
+    //public Task ImportRegionAsync(string regionFile);
     
-    public Task ImportAllRegionsAsync(string regionFolder);
+    public Task ImportAllRegionsAsync(ConvertToSql.Settings settings);
     
     public Task ImportCnmtsAsync(string cnmtsFile);
     

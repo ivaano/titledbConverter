@@ -15,7 +15,11 @@ public class Title
     [Column(TypeName = "VARCHAR")]
     [StringLength(200)]
     public string? TitleName { get; set; }
-    
+    [Column(TypeName = "VARCHAR")]
+    [StringLength(2)]
+    public string Region { get; set; }
     public virtual ICollection<Cnmt>? Cnmts { get; set; }
     public virtual ICollection<Version>? Versions { get; set; }
+    
+    public List<Region> Regions { get; set; } = [];
 }

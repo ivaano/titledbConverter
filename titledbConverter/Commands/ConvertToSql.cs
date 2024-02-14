@@ -27,6 +27,14 @@ public sealed class ConvertToSql : AsyncCommand<ConvertToSql.Settings>
         [CommandArgument(0, "[location]")]
         [Description("Specify folder where titledb files are located")]
         public string? DownloadPath { get; set; }
+        
+        [CommandOption("-r|--region")]
+        [Description("Prefered region to import")]
+        public string? Region { get; set; }
+        
+        [CommandOption("-l|--language")]
+        [Description("Prefered language to import")]
+        public string? Language { get; set; }
     }
 
 
@@ -35,10 +43,12 @@ public sealed class ConvertToSql : AsyncCommand<ConvertToSql.Settings>
         var stopwatch = Stopwatch.StartNew();
 
         settings.DownloadPath ??= _configuration.Value.DownloadPath;
+        settings.Language ??= _configuration.Value.PreferredLanguage;
+        settings.Region ??= _configuration.Value.PreferredRegion;
         //var regionFile = Path.Join(settings.DownloadPath, "US.en.json");
         //var regionFile = Path.Join(settings.DownloadPath, "ivan.json");
         //await _titleDbService.ImportRegionAsync(regionFile);
-        await _titleDbService.ImportAllRegionsAsync(settings.DownloadPath);
+        await _titleDbService.ImportAllRegionsAsync(settings);
         /*
         var cnmtFile = Path.Join(settings.DownloadPath, "cnmts.json");
         await _titleDbService.ImportCnmtsAsync(cnmtFile);

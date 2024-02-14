@@ -20,7 +20,11 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         context.Titles.AddRange(titles);
         context.BulkSaveChanges();
         //await context.BulkInsertAsync(titles, options => options.IncludeGraph = true);
-        
+    }
+
+    public List<Region> GetRegions()
+    {
+        return context.Regions.ToList();
     }
     
     protected virtual void Dispose(bool disposing)

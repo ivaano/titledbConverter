@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using titledbConverter.Models;
+using Region = titledbConverter.Models.Region;
 using Version = titledbConverter.Models.Version;
 
 namespace titledbConverter.Data;
@@ -9,6 +10,7 @@ public class SqliteDbContext : DbContext
    public DbSet<Title> Titles { get; set; }
    public DbSet<Cnmt> Cnmts { get; set; }
    public DbSet<Version> Versions { get; set; }
+   public DbSet<Region> Regions { get; set; }
    
    public SqliteDbContext(DbContextOptions<SqliteDbContext> options) : base(options)
    {
@@ -35,5 +37,18 @@ public class SqliteDbContext : DbContext
            .WithOne(e => e.Title)
            .HasForeignKey(e => e.TitleId)
            .HasPrincipalKey(e => e.Id);       
+       
+       modelBuilder.Entity<Title>()
+           .HasMany(e => e.Regions)
+           .WithMany(e => e.Titles);
+
+       
+       var regions = new string[] {"BG", "BR", "CH", "CY", "EE", "HR", "IE", "LT", "LU", "LV", "MT", "RO", "SI", "SK", "CO", "AR", "CL", "PE", "KR", "HK", "CN", "NZ", "AT", "BE", "CZ", "DK", "ES", "FI", "GR", "HU", "NL", "NO", "PL", "PT", "RU", "ZA", "SE", "MX", "US"};
+       var regionObjects = regions.OrderBy(r => r)
+           .Select((r, i) => new Region { Id = i + 1, Name = r })
+           .ToArray();
+
+       modelBuilder.Entity<Region>().HasData(regionObjects);
+
    }
 }
