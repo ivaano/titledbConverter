@@ -18,7 +18,8 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
     public async Task BulkInsertTitlesAsync(List<Title> titles)
     {
         context.Titles.AddRange(titles);
-        context.BulkSaveChanges();
+        context.SaveChanges();
+        //context.BulkSaveChanges();
         //await context.BulkInsertAsync(titles, options => options.IncludeGraph = true);
     }
 

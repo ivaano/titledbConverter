@@ -20,6 +20,5 @@ public class Title
     public string Region { get; set; }
     public virtual ICollection<Cnmt>? Cnmts { get; set; }
     public virtual ICollection<Version>? Versions { get; set; }
-    
-    public List<Region> Regions { get; set; } = [];
+    public List<Region>? Regions { get; set; } = [];
 }

@@ -116,6 +116,14 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
 
         await Task.WhenAll(_regionLanguagesDefault.Select(region => ImportRegionAsync(region, settings.DownloadPath)));
         var peta = _lazyDict.Values.Select(x => x.Value).ToList();
+
+        /*
+        foreach (var title in peta)
+        {
+            await dbService.AddTitleAsync(title);
+        }
+*/
+        
         await dbService.BulkInsertTitlesAsync(peta);
         //await dbService.BulkInsertTitlesAsync(_titles.ToList());
     }
@@ -182,7 +190,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
                 }
             }
         }
-
+        
         return title;
     }
 
@@ -192,22 +200,41 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         
         if (regionLanguage.Region == regionLanguage.PreferredRegion && regionLanguage.Language == regionLanguage.PreferredLanguage)
         {
-            var title = ImportTitle(game);
-            title.Region = regionLanguage.Region;
-            title.Regions = [_regions.First(r => r.Name == regionLanguage.Region)];
-            _lazyDict.GetOrAdd(game.Value.NsuId, new Lazy<Title>(() => title));
+            if (_lazyDict.TryGetValue(game.Value.NsuId, out var value))
+            {
+                var title = value.Value;
+                title.TitleName = game.Value.Name;
+                title.Region = regionLanguage.Region;
+                title.Regions.Add(_regions.First(r => r.Name == regionLanguage.Region));
+            }
+            else
+            {
+                var title = ImportTitle(game);
+                title.Region = regionLanguage.Region;
+                title.Regions = new List<Region> {_regions.First(r => r.Name == regionLanguage.Region)};
+                _lazyDict.GetOrAdd(game.Value.NsuId, new Lazy<Title>(() => title));
+            }
         }
-        else if (regionLanguage.Language == regionLanguage.PreferredLanguage)
+        else if (regionLanguage.Region != regionLanguage.PreferredRegion && regionLanguage.Language == regionLanguage.PreferredLanguage)
         {
             //Add region to title
             if (_lazyDict.TryGetValue(game.Value.NsuId, out var value))
             {
                 var title = value.Value;
-                title.TitleName = game.Value.Name;
+                //title.TitleName = game.Value.Name;
+                if (string.IsNullOrEmpty(title.Region))
+                {
+                    title.Region = regionLanguage.Region;
+                    title.Regions.Add(_regions.First(r => r.Name == regionLanguage.Region));
+                }
+                title.Regions.Add(new Region {Name = regionLanguage.Region});
+                
             }
             else
             {
                 var title = ImportTitle(game);
+                title.Region = regionLanguage.Region;
+                title.Regions.Add(_regions.First(r => r.Name == regionLanguage.Region));
                 _lazyDict.GetOrAdd(game.Value.NsuId, new Lazy<Title>(() => title));
             }
         }
