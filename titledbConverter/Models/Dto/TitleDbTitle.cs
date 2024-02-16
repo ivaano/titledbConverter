@@ -42,6 +42,9 @@ public record TitleDbTitle()
     public List<string>? RatingContent { get; set; }
     [JsonPropertyName("region")]
     public string? Region { get; set; }
+    public List<string>? Regions { get; set; }
+    public List<Cnmt>? Cnmts { get; set; }
+    public List<Version>? Versions { get; set; }
     [JsonPropertyName("releaseDate")]
     public int? ReleaseDate { get; set; }
     [JsonPropertyName("rightsId")]
