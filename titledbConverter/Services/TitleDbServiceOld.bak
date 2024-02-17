@@ -301,22 +301,24 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         
         return title;
     }
+    
 
-    private void AddOrUpdateTitle(KeyValuePair<string, TitleDbTitle> game, RegionLanguage regionLanguage)
+    private void ProcessTitleDto(KeyValuePair<string, TitleDbTitle> game, RegionLanguage regionLanguage)
     {
-        if (_titlesDict.TryGetValue(game.Value.NsuId, out var value))
+        if (string.IsNullOrEmpty(game.Value.Id)) return;
+
+        if (regionLanguage.Region == regionLanguage.PreferredRegion &&
+            regionLanguage.Language == regionLanguage.PreferredLanguage)
         {
-            var title = value.Value;
-            if (string.IsNullOrEmpty(title.Region))
+            if (_titlesDict.TryGetValue(game.Value.NsuId, out var value))
             {
-                title.Region = regionLanguage.Region;
-                var region = _regions.First(r => r.Name == regionLanguage.Region);
-                title.Regions?.Add(region.Name);
-            }
-            
-            if (title.Region != regionLanguage.Region)
-            {
-                title.Regions?.Add(regionLanguage.Region);
+                var title = value.Value;
+                if (string.IsNullOrEmpty(title.Region))
+                {
+                    title.Region = regionLanguage.Region;
+                    var region = _regions.First(r => r.Name == regionLanguage.Region);
+                    title.Regions?.Add(region.Name);
+                }
             }
         }
         else
@@ -335,25 +337,10 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         }
     }
 
-    private void ProcessTitleDto(KeyValuePair<string, TitleDbTitle> game, RegionLanguage regionLanguage)
-    {
-        if (string.IsNullOrEmpty(game.Value.Id)) return;
-
-        if (regionLanguage.Region == regionLanguage.PreferredRegion &&
-            regionLanguage.Language == regionLanguage.PreferredLanguage)
-        {
-            AddOrUpdateTitle(game, regionLanguage);
-        }
-        else if (regionLanguage.Region != regionLanguage.PreferredRegion 
-                 && regionLanguage.Language == regionLanguage.PreferredLanguage)
-        {
-            AddOrUpdateTitle(game, regionLanguage);
-        }
-    }
-
     private async Task ImportRegionAsync(RegionLanguage regionLanguage, string downloadPath)
     {
-
+        var regions = dbService.GetRegions();
+        _regions = new ConcurrentBag<Region>(regions);
         var regionFile = Path.Join(downloadPath, $"{regionLanguage.Region}.{regionLanguage.Language}.json");
         AnsiConsole.MarkupLineInterpolated($"[bold green]Processing {regionFile}[/]");
         var regionTitles = await GetTitlesJsonFilesAsync(regionFile);
@@ -368,14 +355,11 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
 
     public async Task ImportAllRegionsAsync(ConvertToSql.Settings settings)
     {
-        var regions = dbService.GetRegions();
-        _regions = new ConcurrentBag<Region>(regions);
-        
         await Task.WhenAll(
             LoadRegionLanguagesAsync(Path.Join(settings.DownloadPath, "languages.json"), settings.Region, settings.Language),
             LoadCnmtsJsonFilesAsync(Path.Join(settings.DownloadPath, "cnmts.json")),
             LoadVersionsJsonFilesAsync(Path.Join(settings.DownloadPath, "versions.json")));
-        
+
         var preferedRegion = _regionLanguagesDefault.FirstOrDefault(r => r.Region == settings.Region);
         ImportRegionAsync(preferedRegion, settings.DownloadPath).Wait();
         AnsiConsole.MarkupLine($"[bold green]Lazy Dict Size: {_titlesDict.Values.Count}[/]");
@@ -388,7 +372,6 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         //await Task.WhenAll(_regionLanguagesDefault.Select(region => ImportRegionAsync(region, settings.DownloadPath)));
         var peta = _titlesDict.Values.Select(x => x.Value).ToList();
 
-        var mx = _titlesDict.Values.Where(x => x.Value.Region == "MX").Select(x => x.Value).ToList();
 
         
         //await dbService.BulkInsertTitlesAsync(peta);

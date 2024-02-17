@@ -32,4 +32,8 @@
       <Folder Include="Migrations\" />
     </ItemGroup>
 
+    <ItemGroup>
+      <None Include="Services\TitleDbServiceOld.bak" />
+    </ItemGroup>
+
 </Project>
