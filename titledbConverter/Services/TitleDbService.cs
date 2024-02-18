@@ -376,19 +376,20 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
             LoadCnmtsJsonFilesAsync(Path.Join(settings.DownloadPath, "cnmts.json")),
             LoadVersionsJsonFilesAsync(Path.Join(settings.DownloadPath, "versions.json")));
         
-        var preferedRegion = _regionLanguagesDefault.FirstOrDefault(r => r.Region == settings.Region);
+        var preferedRegion = _regionLanguagesDefault.FirstOrDefault(r =>
+        {
+            return r.Region == settings.Region && r.Language == settings.Language;
+        });
         ImportRegionAsync(preferedRegion, settings.DownloadPath).Wait();
         AnsiConsole.MarkupLine($"[bold green]Lazy Dict Size: {_titlesDict.Values.Count}[/]");
-        //await ImportRegionAsync(preferedRegion, settings.DownloadPath);
-        //var allOthers = _regionLanguagesDefault.Where(r => r.Region != settings.Region).Where(r => r.Language == settings.Language).Select(r => r.Region).ToList();
+        
         await Task.WhenAll(_regionLanguagesDefault.Where(r => r.Region != settings.Region)
             //.Where(r => r.Language == settings.Language)
             .Select(region => ImportRegionAsync(region, settings.DownloadPath)));
-        //await Task.WhenAll(_regionLanguagesDefault.Where(r => r.Language == settings.Language).Select(region => ImportRegionAsync(region, settings.DownloadPath)));
-        //await Task.WhenAll(_regionLanguagesDefault.Select(region => ImportRegionAsync(region, settings.DownloadPath)));
+        
         var peta = _titlesDict.Values.Select(x => x.Value).ToList();
 
-        var mx = _titlesDict.Values.Where(x => x.Value.Region == "MX").Select(x => x.Value).ToList();
+        var mx = _titlesDict.Values.Where(x => x.Value.Region != "US").Select(x => x.Value).ToList();
 
         
         //await dbService.BulkInsertTitlesAsync(peta);
