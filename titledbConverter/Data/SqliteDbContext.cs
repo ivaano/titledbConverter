@@ -43,7 +43,7 @@ public class SqliteDbContext : DbContext
            .WithMany(e => e.Titles);
 
        
-       var regions = new string[] {"BG", "BR", "CH", "CY", "EE", "HR", "IE", "LT", "LU", "LV", "MT", "RO", "SI", "SK", "CO", "AR", "CL", "PE", "KR", "HK", "CN", "NZ", "AT", "BE", "CZ", "DK", "ES", "FI", "GR", "HU", "NL", "NO", "PL", "PT", "RU", "ZA", "SE", "MX", "US"};
+       var regions = new string[] {"BG", "BR", "CH", "CY", "EE", "HR", "IE", "LT", "LU", "LV", "MT", "RO", "SI", "SK", "CO", "AR", "CL", "PE", "KR", "HK", "CN", "NZ", "AT", "BE", "CZ", "DK", "ES", "FI", "GR", "HU", "NL", "NO", "PL", "PT", "RU", "ZA", "SE", "GB", "MX", "US"};
        var regionObjects = regions.OrderBy(r => r)
            .Select((r, i) => new Region { Id = i + 1, Name = r })
            .ToArray();

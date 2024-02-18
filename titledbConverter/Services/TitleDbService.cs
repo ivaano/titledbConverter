@@ -21,7 +21,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     private ConcurrentBag<RegionLanguage> _regionLanguagesDefault = default!;
     private Dictionary<string, TitleDbTitle> _regionTitles = default!;
     private ConcurrentDictionary<long, Lazy<Title>> _lazyDict = [];
-    private ConcurrentDictionary<long, Lazy<TitleDbTitle>> _titlesDict = [];
+    private ConcurrentDictionary<string, Lazy<TitleDbTitle>> _titlesDict = [];
     private ConcurrentBag<Title> _titles = [];
     private ConcurrentBag<Region> _regions = [];
     private bool _isCnmtsLoaded = false;
@@ -242,7 +242,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     
     private TitleDbTitle ImportTitleDto(KeyValuePair<string, TitleDbTitle> game)
     {
-        var title = game.Value; 
+       var title = game.Value; 
        title.Cnmts = new List<Cnmt>();
        title.Versions = new List<Version>();
 
@@ -304,7 +304,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
 
     private void AddOrUpdateTitle(KeyValuePair<string, TitleDbTitle> game, RegionLanguage regionLanguage)
     {
-        if (_titlesDict.TryGetValue(game.Value.NsuId, out var value))
+        if (_titlesDict.TryGetValue(game.Value.Id, out var value))
         {
             var title = value.Value;
             if (string.IsNullOrEmpty(title.Region))
@@ -325,13 +325,20 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
             title.Region = regionLanguage.Region;
             try
             {
-                var regions = new List<string> { _regions.First(r => r.Name == regionLanguage.Region).Name };    
-                title.Regions = regions;
+                var regions = new List<string> { _regions.First(r => r.Name == regionLanguage.Region).Name };  
+                if (title.Regions is not null)
+                {
+                    title.Regions.AddRange(regions);
+                }
+                else
+                {
+                    title.Regions = regions;
+                }
             } catch (Exception e)
             {
                 AnsiConsole.MarkupLine($"[bold red]Error: {e.Message} {regionLanguage.Region}[/]");
             }
-            _titlesDict.GetOrAdd(game.Value.NsuId, new Lazy<TitleDbTitle>(() => title));
+            _titlesDict.GetOrAdd(game.Value.Id, new Lazy<TitleDbTitle>(() => title));
         }
     }
 
@@ -355,9 +362,9 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     {
 
         var regionFile = Path.Join(downloadPath, $"{regionLanguage.Region}.{regionLanguage.Language}.json");
-        AnsiConsole.MarkupLineInterpolated($"[bold green]Processing {regionFile}[/]");
         var regionTitles = await GetTitlesJsonFilesAsync(regionFile);
-        var options = new ParallelOptions { MaxDegreeOfParallelism = 2 };
+        AnsiConsole.MarkupLineInterpolated($"[bold green]Processing {regionFile}[/]");
+        var options = new ParallelOptions { MaxDegreeOfParallelism = 1 };
 
         //Parallel.ForEach(regionTitles, options, kvp => ProcessTitle(kvp, regionLanguage));
         Parallel.ForEach(regionTitles, options, kvp => ProcessTitleDto(kvp, regionLanguage));
@@ -376,10 +383,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
             LoadCnmtsJsonFilesAsync(Path.Join(settings.DownloadPath, "cnmts.json")),
             LoadVersionsJsonFilesAsync(Path.Join(settings.DownloadPath, "versions.json")));
         
-        var preferedRegion = _regionLanguagesDefault.FirstOrDefault(r =>
-        {
-            return r.Region == settings.Region && r.Language == settings.Language;
-        });
+        var preferedRegion = _regionLanguagesDefault.FirstOrDefault(r => r.Region == settings.Region && r.Language == settings.Language);
         ImportRegionAsync(preferedRegion, settings.DownloadPath).Wait();
         AnsiConsole.MarkupLine($"[bold green]Lazy Dict Size: {_titlesDict.Values.Count}[/]");
         
