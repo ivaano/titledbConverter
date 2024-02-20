@@ -71,6 +71,8 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
         {
             ("cnmts.json", new Uri(_baseUri, "cnmts.json").ToString()),
             ("versions.json", new Uri(_baseUri, "versions.json").ToString()),
+            ("ncas.json", new Uri(_baseUri, "ncas.json").ToString()),
+            ("versions.txt", new Uri(_baseUri, "versions.txt").ToString()),
         };
         
         foreach (var (key, value) in regions)

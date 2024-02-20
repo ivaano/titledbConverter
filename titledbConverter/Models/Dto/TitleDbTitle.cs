@@ -42,9 +42,6 @@ public record TitleDbTitle()
     public List<string>? RatingContent { get; set; }
     [JsonPropertyName("region")]
     public string? Region { get; set; }
-    public List<string>? Regions { get; set; }
-    public List<Cnmt>? Cnmts { get; set; }
-    public List<Version>? Versions { get; set; }
     [JsonPropertyName("releaseDate")]
     public int? ReleaseDate { get; set; }
     [JsonPropertyName("rightsId")]
@@ -55,6 +52,13 @@ public record TitleDbTitle()
     public long? Size { get; set; }
     [JsonPropertyName("Version")]
     public string? Version { get; set; }
-    public DateTime CreatedTime { get; set; }
-    public DateTime ModifiedTime { get; set; }
+    public bool IsBase { get; set; } = false;
+    public bool IsDlc { get; set; } = false;
+    public bool IsUpdate { get; set; } = false;
+    
+    public List<string>? Regions { get; set; }
+    public List<Version>? Versions { get; set; }
+    public List<TitleDbCnmt>? Cnmts { get; set; }
+    public List<TitleDbNca>? Ncas { get; set; }
+
 }
