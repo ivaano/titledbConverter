@@ -1,6 +1,9 @@
 ﻿using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
+using CsvHelper;
+using CsvHelper.Configuration;
 using Spectre.Console;
 using titledbConverter.Commands;
 using titledbConverter.Models;
@@ -106,7 +109,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         AnsiConsole.MarkupLine($"[springgreen3_1]Loaded {fileLocation} in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
         return ncas;
     }
-   
+  
     private static async Task<SortedDictionary<string, TitleDbTitle>> GetTitlesJsonFilesAsync(string fileLocation)
     {
         SortedDictionary<string, TitleDbTitle> titles;
@@ -133,21 +136,13 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
             return TitleType.AddOnContent;
         }
         
-        if (idExt == 0)
-        {
-            return TitleType.Base;
-            //var updateId = $"{titleId.Substring(0, titleId.Length - 3)}800";
-        }
-        else
-        {
-            return TitleType.Update;
-        }
+        return idExt == 0 ? TitleType.Base : TitleType.Update;
     }
     
     private TitleDbTitle InitTitleDto(TitleDbTitle title)
     {
-        title.Cnmts = new List<TitleDbCnmt>();
-        title.Versions = new List<Version>();
+        title.Cnmts ??= [];
+        title.Versions ??= [];
         var type = GetTitleType(title.Id);
         
         switch (type)
@@ -294,11 +289,21 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         var nutTitles = await File.ReadAllTextAsync(Path.Join(settings.DownloadPath, "titles.json"))
             .ContinueWith(fileContent => JsonSerializer.Deserialize<Dictionary<string, NutTitle>>(fileContent.Result));
         var notFound = 0;
+        /*
         foreach (var nutTitle in nutTitles)
         {
             if (!_titlesDict.ContainsKey(nutTitle.Key))
             {
                 AnsiConsole.MarkupLine($"[bold red]Notfound {nutTitle.Key}[/]");
+                notFound++;
+            }
+        }
+        */
+        foreach (var title in _titlesDict)
+        {
+            if (!nutTitles.ContainsKey(title.Key))
+            {
+                AnsiConsole.MarkupLine($"[bold red]Notfound {title.Key}[/]");
                 notFound++;
             }
         }
@@ -312,7 +317,6 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
             nca.Value.NcaId = nca.Key;
             if (_titlesDict.TryGetValue(nca.Value.TitleId, out var game))
             {
-                //var title = value.Value;
                 var title = InitTitleDto(game.Value);
 
                 if (title.Ncas != null)
@@ -323,7 +327,8 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
                 {
                     title.Ncas = new List<TitleDbNca> { nca.Value };
                 }
-                _titlesDict.TryUpdate(nca.Value.TitleId,  new Lazy<TitleDbTitle>(() => title), game);            }
+                _titlesDict.TryUpdate(nca.Value.TitleId,  new Lazy<TitleDbTitle>(() => title), game);            
+            }
             else
             {
                 var titleNcas = new List<TitleDbNca> { nca.Value };
@@ -334,7 +339,28 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
                 });
                 _titlesDict.GetOrAdd(nca.Value.TitleId, new Lazy<TitleDbTitle>(() => title));
             }
-            
+        }
+    }
+    
+    private void ImportVersionsTxt(string filePath)
+    {
+        using var reader = new StreamReader(filePath);
+        var config = CsvConfiguration.FromAttributes<TitleDbVersionsTxt>();
+
+        using var csv = new CsvReader(reader, config);
+        //csv.Context.RegisterClassMap<TitleDbVersionsTxtMap>();
+
+        var records = csv.GetRecords<TitleDbVersionsTxt>();
+        foreach (var r in records)
+        {
+            var title = InitTitleDto(new TitleDbTitle
+            {
+                Id = r.Id,
+                RightsId = r.RightsId,
+                Version = r.Version
+            });
+            _titlesDict.GetOrAdd(r.Id, new Lazy<TitleDbTitle>(() => title));
+
         }
     }
 
@@ -360,23 +386,25 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
 
         AnsiConsole.MarkupLine($"[bold green]Lazy Dict Size: {_titlesDict.Values.Count}[/]");
 
-        //var mx = _titlesDict.Values.Where(x => x.Value.Region != "HK").Select(x => x.Value).ToList();
         var ncas = await LoadNcasAsync(Path.Join(settings.DownloadPath, "ncas.json"));
         ImportNcas(ncas);
-        await TitleComparer(settings);
-        
+        ImportVersionsTxt(Path.Join(settings.DownloadPath, "versions.txt"));
+        //await TitleComparer(settings);
+
+        /*
         foreach (var reg in _regions)
         {
             var mx = _titlesDict.Values.Where(x => x.Value.Region == reg.Name).Select(x => x.Value).ToList();
             AnsiConsole.MarkupLine($"[bold green]Region: {reg.Name} Count: {mx.Count}[/]");
         }
-        AnsiConsole.MarkupLine($"[bold green]Titles Count Count: {_titlesDict.Values.Count}[/]");
+        */
         var baseGames = _titlesDict.Values.Where(x => x.Value.IsBase).Select(x => x.Value).ToList();
         var dlcGames = _titlesDict.Values.Where(x => x.Value.IsDlc).Select(x => x.Value).ToList();
         var updateGames = _titlesDict.Values.Where(x => x.Value.IsUpdate).Select(x => x.Value).ToList();
-        AnsiConsole.MarkupLine($"[bold green]Base Games: {baseGames.Count}[/]");
-        AnsiConsole.MarkupLine($"[bold green]DLC Games: {dlcGames.Count}[/]");
-        AnsiConsole.MarkupLine($"[bold green]Update Games: {updateGames.Count}[/]");
+        AnsiConsole.MarkupLine($"[bold green]Titles Count Count: {_titlesDict.Values.Count}[/]");
+        AnsiConsole.MarkupLine($"[bold green]Base Titles: {baseGames.Count}[/]");
+        AnsiConsole.MarkupLine($"[bold green]DLC Titles: {dlcGames.Count}[/]");
+        AnsiConsole.MarkupLine($"[bold green]Update Titles: {updateGames.Count}[/]");
 
         //await dbService.BulkInsertTitlesAsync(peta);
         //await dbService.BulkInsertTitlesAsync(_titles.ToList());

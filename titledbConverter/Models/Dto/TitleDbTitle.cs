@@ -50,7 +50,7 @@ public record TitleDbTitle()
     public List<string>? Screenshots { get; set; }
     [JsonPropertyName("size")]
     public long? Size { get; set; }
-    [JsonPropertyName("Version")]
+    [JsonPropertyName("version")]
     public string? Version { get; set; }
     public bool IsBase { get; set; } = false;
     public bool IsDlc { get; set; } = false;
