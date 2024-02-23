@@ -52,13 +52,19 @@ public record TitleDbTitle()
     public long? Size { get; set; }
     [JsonPropertyName("version")]
     public string? Version { get; set; }
+    [JsonPropertyName("isBase")]
     public bool IsBase { get; set; } = false;
+    [JsonPropertyName("isDlc")]
     public bool IsDlc { get; set; } = false;
+    [JsonPropertyName("isUpdate")]
     public bool IsUpdate { get; set; } = false;
-    
+    [JsonPropertyName("regions")]
     public List<string>? Regions { get; set; }
+    [JsonPropertyName("versions")]
     public List<Version>? Versions { get; set; }
+    [JsonPropertyName("cnmts")]
     public List<TitleDbCnmt>? Cnmts { get; set; }
+    [JsonPropertyName("ncas")]
     public List<TitleDbNca>? Ncas { get; set; }
 
 }

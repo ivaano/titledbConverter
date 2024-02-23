@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,15 +17,10 @@ namespace titledbConverter;
 
 public static class Program
 {
-    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(ConvertToSql))]
-    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(ConvertToSql.Settings))]
-    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(DownloadCommand))]
-    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(DownloadCommand.Settings))]
-    [DynamicDependency(DynamicallyAccessedMemberTypes.All, "Spectre.Console.Cli.ExplainCommand", "Spectre.Console.Cli")]
-    [DynamicDependency(DynamicallyAccessedMemberTypes.All, "Spectre.Console.Cli.VersionCommand", "Spectre.Console.Cli")]
-    [DynamicDependency(DynamicallyAccessedMemberTypes.All, "Spectre.Console.Cli.XmlDocCommand", "Spectre.Console.Cli")]
     public static int Main(string[] args)
     {
+        Console.OutputEncoding = Encoding.UTF8;
+
         var host = CreateHostBuilder(args);
         var app = new CommandApp(new TypeRegistrar(host));
         app.Configure(c =>
@@ -32,6 +28,7 @@ public static class Program
             c.PropagateExceptions();
             c.AddCommand<DownloadCommand>("download").WithExample("download", "I:\\titledb");
             c.AddCommand<ConvertToSql>("convert");
+            c.AddCommand<ImportTitles>("import");
         });
         return app.Run(args);
     }
@@ -48,6 +45,7 @@ public static class Program
                     options.UseSqlite(hostContext.Configuration.GetConnectionString("SqliteConnection"));
                 });
                 services.AddScoped<ITitleDbService, TitleDbService>();
+                services.AddScoped<IImportTitleService, ImportTitleService>();
                 services.AddScoped<IDbService, DbService>();
             })
             .ConfigureLogging(logging =>

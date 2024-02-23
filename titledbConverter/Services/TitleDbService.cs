@@ -21,17 +21,11 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     private ConcurrentDictionary<string, ConcurrentDictionary<string, TitleDbCnmt>> _concurrentCnmts = default!;
     private ConcurrentDictionary<string, TitleDbVersion> _concurrentVersions = default!;
     private ConcurrentDictionary<string, List<string>> _regionLanguages = default!;
-    //private ConcurrentDictionary<string, List<RegionLanguage>> _regionLanguagesDefault = default!;
     private ConcurrentBag<RegionLanguage> _regionLanguagesDefault = default!;
-    private Dictionary<string, TitleDbTitle> _regionTitles = default!;
-    private ConcurrentDictionary<long, Lazy<Title>> _lazyDict = [];
     private ConcurrentDictionary<string, Lazy<TitleDbTitle>> _titlesDict = [];
-    private ConcurrentBag<Title> _titles = [];
     private ConcurrentBag<Region> _regions = [];
     private bool _isCnmtsLoaded = false;
     private bool _isVersionsLoaded = false;
-    private bool _isTitlesLoaded = false;
-    //private 
 
     private async Task<ConcurrentDictionary<string, ConcurrentDictionary<string, TitleDbCnmt>>> LoadCnmtsJsonFilesAsync(
         string fileLocation)
@@ -124,9 +118,8 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         return titles;
     }
 
-    private TitleType GetTitleType(string titleId)
+    private static TitleType GetTitleType(string titleId)
     {
-      
         var titleIdNum = Convert.ToInt64(titleId, 16);
         var isDlc = ((ulong)titleIdNum & 0xFFFFFFFFFFFFE000) != ((ulong)titleIdNum & 0xFFFFFFFFFFFFF000);
         var idExt = titleIdNum & 0x0000000000000FFF;
@@ -139,7 +132,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         return idExt == 0 ? TitleType.Base : TitleType.Update;
     }
     
-    private TitleDbTitle InitTitleDto(TitleDbTitle title)
+    private static TitleDbTitle InitTitleDto(TitleDbTitle title)
     {
         title.Cnmts ??= [];
         title.Versions ??= [];
@@ -230,10 +223,22 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
                 var region = _regions.First(r => r.Name == regionLanguage.Region);
                 title.Regions?.Add(region.Name);
             }
-            
+
             if (title.Region != regionLanguage.Region)
             {
-                title.Regions?.Add(regionLanguage.Region);
+                if (title.Regions != null)
+                {
+                    var exists = title.Regions.Find(s => s == regionLanguage.Region);
+                    if (exists is null)
+                    {
+                        title.Regions.Add(regionLanguage.Region);
+                    }
+                }
+                else
+                {
+                    title.Regions = new List<string> { regionLanguage.Region };
+                }
+               
             }
         }
         else
@@ -348,7 +353,6 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         var config = CsvConfiguration.FromAttributes<TitleDbVersionsTxt>();
 
         using var csv = new CsvReader(reader, config);
-        //csv.Context.RegisterClassMap<TitleDbVersionsTxtMap>();
 
         var records = csv.GetRecords<TitleDbVersionsTxt>();
         foreach (var r in records)
@@ -362,6 +366,12 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
             _titlesDict.GetOrAdd(r.Id, new Lazy<TitleDbTitle>(() => title));
 
         }
+    }
+
+    private async Task SaveJsonTitles(string fileName)
+    {
+        await using FileStream createStream = File.Create(fileName);
+        await JsonSerializer.SerializeAsync(createStream, _titlesDict.Values.Select(x => x.Value), new JsonSerializerOptions { WriteIndented = true });
     }
 
     public async Task ImportAllRegionsAsync(ConvertToSql.Settings settings)
@@ -405,19 +415,9 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         AnsiConsole.MarkupLine($"[bold green]Base Titles: {baseGames.Count}[/]");
         AnsiConsole.MarkupLine($"[bold green]DLC Titles: {dlcGames.Count}[/]");
         AnsiConsole.MarkupLine($"[bold green]Update Titles: {updateGames.Count}[/]");
-
+        await SaveJsonTitles(Path.Join(settings.DownloadPath, "titles-ivan.json"));
         //await dbService.BulkInsertTitlesAsync(peta);
         //await dbService.BulkInsertTitlesAsync(_titles.ToList());
     }
 
-    public Task ImportCnmtsAsync(string cnmtsFile)
-    {
-        var cnmts = LoadCnmtsJsonFilesAsync(cnmtsFile);
-        return Task.CompletedTask;
-    }
-
-    public Task ImportVersionsAsync(string versionsFile)
-    {
-        throw new NotImplementedException();
-    }
 }

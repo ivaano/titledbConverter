@@ -8,17 +8,17 @@ namespace titledbConverter.Models;
 public class Title
 {
     public int Id { get; set; }
-    public long NsuId { get; set; }
+    public long? NsuId { get; set; }
     [Column(TypeName = "VARCHAR")]
     [StringLength(20)]
-    public string? ApplicationId { get; set; }
+    public string ApplicationId { get; set; }
     [Column(TypeName = "VARCHAR")]
     [StringLength(200)]
     public string? TitleName { get; set; }
     [Column(TypeName = "VARCHAR")]
     [StringLength(2)]
-    public string Region { get; set; }
+    public string? Region { get; set; }
     public virtual ICollection<Cnmt>? Cnmts { get; set; }
     public virtual ICollection<Version>? Versions { get; set; }
-    public List<Region>? Regions { get; set; } = [];
+    public ICollection<Region>? Regions { get; set; }
 }
