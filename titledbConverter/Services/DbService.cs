@@ -1,4 +1,5 @@
-﻿using EFCore.BulkExtensions;
+﻿using System.Diagnostics;
+using EFCore.BulkExtensions;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using titledbConverter.Data;
@@ -18,16 +19,82 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         return context.SaveChangesAsync();
     }
     
-    public async Task BulkInsertTitlesAsync(List<Title> titles)
+    public async Task BulkInsertTitlesAsync(IEnumerable<TitleDbTitle> titles)
     {
-        context.Titles.AddRange(titles);
-        context.SaveChanges();
-        //context.BulkSaveChanges();
-        //await context.BulkInsertAsync(titles, options => options.IncludeGraph = true);
+        var stopwatch = Stopwatch.StartNew();
+        var regionDictionary = context.Regions.ToDictionary(region => region.Name, region => region.Id);
+        var batchCount = 0;
+        var titleEntities = new List<Title>();
+        var regionTitles = new List<RegionTitle>();
+        var regionTitlesTitleId = new Dictionary<string, List<string>>();
+       
+        
+        foreach (var title in titles)
+        {
+            batchCount++;
+            AnsiConsole.MarkupLineInterpolated($"[blue]Importing[/][yellow] {title.Id}[/] - [green]{title.Name}[/]");
+            var mappedTitle = MapTitle(title);
+            
+            if (title.Regions is { Count: > 0 })
+            {
+                mappedTitle.Regions = new List<Region>();
+                regionTitlesTitleId.Add(title.Id, title.Regions);
+            }
+            titleEntities.Add(mappedTitle);
+            
+            if (batchCount >= 1000)
+            {
+                AnsiConsole.MarkupLineInterpolated($"[blue]Saving...[/]");
+                context.BulkInsert(titleEntities, new BulkConfig() { SetOutputIdentity = true, PreserveInsertOrder = true });
+                
+                //regions
+                var titleDictionary = titleEntities.ToDictionary(t => t.ApplicationId, t => t.Id);              
+                foreach (var titleEntity in regionTitlesTitleId.Keys)
+                {
+                    foreach (var region in regionTitlesTitleId[titleEntity])
+                    {
+                        if (regionDictionary.TryGetValue(region, out var regionId))
+                        {
+                            regionTitles.Add(new RegionTitle() {RegionId = regionId, TitleId = titleDictionary[titleEntity]});
+                        }
+                    }
+                }
+                context.BulkInsert(regionTitles, new BulkConfig() { SetOutputIdentity = true, PreserveInsertOrder = true });
+                titleEntities.Clear();
+                regionTitles.Clear();
+                regionTitlesTitleId.Clear();
+                
+                batchCount = 0;
+            }
+        }
+        
+        if (batchCount > 0)
+        {
+            context.BulkInsert(titleEntities, new BulkConfig() { SetOutputIdentity = true, PreserveInsertOrder = true });
+            //regions
+            var titleDictionary = titleEntities.ToDictionary(t => t.ApplicationId, t => t.Id);              
+            foreach (var titleEntity in regionTitlesTitleId.Keys)
+            {
+                foreach (var region in regionTitlesTitleId[titleEntity])
+                {
+                    if (regionDictionary.TryGetValue(region, out var regionId))
+                    {
+                        regionTitles.Add(new RegionTitle() {RegionId = regionId, TitleId = titleDictionary[titleEntity]});
+                    }
+                }
+            }
+            context.BulkInsert(regionTitles, new BulkConfig() { SetOutputIdentity = true, PreserveInsertOrder = true });
+        }
+        
+
+        stopwatch.Stop();
+        AnsiConsole.MarkupLine($"[springgreen3_1]Imported all in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
     }
 
     public async Task ImportTitles(IEnumerable<TitleDbTitle> titles)
     {
+        var stopwatch = Stopwatch.StartNew();
+
         var regionDictionary = context.Regions.ToDictionary(region => region.Name, region => region.Id);
 
         var batchCount = 0;
@@ -38,7 +105,7 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             batchCount++;
             AnsiConsole.MarkupLineInterpolated($"[blue]Importing[/][yellow] {title.Id}[/] - [green]{title.Name}[/]");
 
-            var mappedTitle = await MapTitle(title);
+            var mappedTitle = MapTitle(title);
             if (title.Regions is { Count: > 0 })
             {
                 mappedTitle.Regions = new List<Region>();
@@ -95,10 +162,11 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             context.Titles.AddRange(titleEntities);
             await context.SaveChangesAsync();
         }
-        
+        stopwatch.Stop();
+        AnsiConsole.MarkupLine($"[springgreen3_1]Imported all in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
     }
     
-    private Task<Title> MapTitle(TitleDbTitle title)
+    private static Title MapTitle(TitleDbTitle title)
     {
         var newTitle = new Title
         {
@@ -107,7 +175,7 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             TitleName = title.Name,
             Region = title.Region,
         };
-        return Task.FromResult(newTitle);
+        return newTitle;
     }
 
     public async Task ImportTitle(TitleDbTitle title)

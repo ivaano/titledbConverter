@@ -200,13 +200,47 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
 
     private void ProcessTitleAdditionalIds(TitleDbTitle title)
     {
-        if (title.Ids is not null)
+        if (title.Ids is not null && title.Ids.Count > 1)
         {
+            //var objectCopier = new ObjectCopier();
+
             foreach (var id in title.Ids)
             {
                 if (_titlesDict.TryGetValue(id, out var value)) continue;
-                var titleValue = title;
-                titleValue.Id = id;
+                //var titleValue = (TitleDbTitle)objectCopier.DeepCopyGroBufBinary(title);
+                //var titleValue = title;
+                //titleValue.Id = id;
+
+                var titleValue = new TitleDbTitle
+                {
+                   Id = id,
+                   Ids = title.Ids,
+                   BannerUrl = title.BannerUrl,
+                   Category = title.Category,
+                   Description = title.Description,
+                   Developer = title.Developer,
+                   FrontBoxArt = title.FrontBoxArt,
+                   IconUrl = title.IconUrl,
+                   Intro = title.Intro,
+                   IsDemo = title.IsDemo,
+                   Key = title.Key,
+                   Languages = title.Languages,
+                   Name = title.Name,
+                   NsuId = title.NsuId,
+                   NumberOfPlayers = title.NumberOfPlayers,
+                   Publisher = title.Publisher,
+                   Rating = title.Rating,
+                   RatingContent = title.RatingContent,
+                   Region = title.Region,
+                   ReleaseDate = title.ReleaseDate,
+                   RightsId = title.RightsId,
+                   Screenshots = title.Screenshots,
+                   Size = title.Size,
+                   Version = title.Version,
+                   Versions = title.Versions,
+                   Cnmts = title.Cnmts,
+                   Ncas = title.Ncas
+                };
                 _titlesDict.GetOrAdd(id, new Lazy<TitleDbTitle>(() => titleValue));
             }
         }

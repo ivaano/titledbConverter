@@ -42,13 +42,7 @@ public class ImportTitleService : IImportTitleService
     public async Task ImportTitlesFromFileAsync(string file)
     {
         var titles = await ReadTitlesJsonFile(file);
-        await _dbService.ImportTitles(titles);
-/*
-        foreach (var title in titles)
-        {
-            await _dbService.ImportTitle(title);
-            AnsiConsole.MarkupLineInterpolated($"[blue]Importing[/][yellow] {title.Id}[/] - [green]{title.Name}[/]");
-        }
-        */
-    }
+        //await _dbService.ImportTitles(titles);
+        await _dbService.BulkInsertTitlesAsync(titles);
+   }
 }

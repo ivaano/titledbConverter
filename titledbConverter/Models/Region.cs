@@ -11,5 +11,5 @@ public class Region
     [Column(TypeName = "VARCHAR")]
     [StringLength(2)]
     public string Name { get; set; }
-    public List<Title> Titles { get; } = [];
+    public ICollection<Title> Titles { get; } = [];
 }
