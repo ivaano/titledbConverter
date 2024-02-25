@@ -42,7 +42,11 @@ public class SqliteDbContext : DbContext
            .HasMany(e => e.Regions)
            .WithMany(e => e.Titles)
            .UsingEntity<RegionTitle>();
-
+      
+       modelBuilder.Entity<Title>()
+           .HasMany(e => e.Categories)
+           .WithMany(e => e.Titles)
+           .UsingEntity<CategoryTitle>();
        
        var regions = new string[] {"AR", "AU", "BG", "BR", "CA", "CO", "CH", "CL", "CY",  "DE", "EE", "FR", "HR", "IE", "IT", "LT", "LU", "LV", "MT", "RO", "SI", "SK", "JP", "PE", "KR", "HK", "CN", "NZ", "AT", "BE", "CZ", "DK", "ES", "FI", "GR", "HU", "NL", "NO", "PL", "PT", "RU", "ZA", "SE", "GB", "MX", "US"};
        var regionObjects = regions.OrderBy(r => r)

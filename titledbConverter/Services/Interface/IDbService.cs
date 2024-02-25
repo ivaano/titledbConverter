@@ -10,4 +10,5 @@ public interface IDbService
     public List<Region> GetRegions();
     public Task ImportTitles(IEnumerable<TitleDbTitle> titles);
     public Task ImportTitle(TitleDbTitle title);
+    public Task ImportTitlesCategories(IEnumerable<TitleDbTitle> titles);
 }

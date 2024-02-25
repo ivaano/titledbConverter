@@ -21,4 +21,5 @@ public class Title
     public virtual ICollection<Cnmt>? Cnmts { get; set; }
     public virtual ICollection<Version>? Versions { get; set; }
     public ICollection<Region>? Regions { get; set; }
+    public ICollection<Category>? Categories { get; set; }
 }

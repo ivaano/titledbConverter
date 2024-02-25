@@ -207,9 +207,6 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
             foreach (var id in title.Ids)
             {
                 if (_titlesDict.TryGetValue(id, out var value)) continue;
-                //var titleValue = (TitleDbTitle)objectCopier.DeepCopyGroBufBinary(title);
-                //var titleValue = title;
-                //titleValue.Id = id;
 
                 var titleValue = new TitleDbTitle
                 {
@@ -232,6 +229,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
                    Rating = title.Rating,
                    RatingContent = title.RatingContent,
                    Region = title.Region,
+                   Language = title.Language,
                    ReleaseDate = title.ReleaseDate,
                    RightsId = title.RightsId,
                    Screenshots = title.Screenshots,
@@ -263,22 +261,22 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
                 if (title.Regions != null)
                 {
                     var exists = title.Regions.Find(s => s == regionLanguage.Region);
-                    if (exists is null)
-                    {
-                        title.Regions.Add(regionLanguage.Region);
-                    }
+                    if (exists is not null) return;
+                    title.Regions.Add(regionLanguage.Region);
+                    title.Regions.Sort();
                 }
                 else
                 {
                     title.Regions = new List<string> { regionLanguage.Region };
                 }
-               
             }
         }
         else
         {
             var title = ImportTitleDto(game);
             title.Region = regionLanguage.Region;
+            title.Language = regionLanguage.Language;
+
             try
             {
                 var regions = new List<string> { _regions.First(r => r.Name == regionLanguage.Region).Name };  
@@ -298,7 +296,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
             ProcessTitleAdditionalIds(title);
         }
     }
-
+    
     private void ProcessTitleDto(KeyValuePair<string, TitleDbTitle> game, RegionLanguage regionLanguage)
     {
         if (!string.IsNullOrEmpty(game.Value.Id) )
@@ -313,7 +311,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         var regionFile = Path.Join(downloadPath, $"{regionLanguage.Region}.{regionLanguage.Language}.json");
         var regionTitles = await GetTitlesJsonFilesAsync(regionFile);
         AnsiConsole.MarkupLineInterpolated($"[bold green]Processing {regionFile}[/]");
-        var options = new ParallelOptions { MaxDegreeOfParallelism = 1 };
+        var options = new ParallelOptions { MaxDegreeOfParallelism = -1 };
 
         //Parallel.ForEach(regionTitles, options, kvp => ProcessTitle(kvp, regionLanguage));
         Parallel.ForEach(regionTitles, options, kvp => ProcessTitleDto(kvp, regionLanguage));
@@ -405,7 +403,10 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     private async Task SaveJsonTitles(string fileName)
     {
         await using FileStream createStream = File.Create(fileName);
-        await JsonSerializer.SerializeAsync(createStream, _titlesDict.Values.Select(x => x.Value), new JsonSerializerOptions { WriteIndented = true });
+        //await JsonSerializer.SerializeAsync(createStream, _titlesDict.Values.Select(x => x.Value), new JsonSerializerOptions { WriteIndented = true });
+        var sortedTitlesDict = new SortedDictionary<string, Lazy<TitleDbTitle>>(_titlesDict);
+        await JsonSerializer.SerializeAsync(createStream, sortedTitlesDict.Values.Select(x => x.Value), new JsonSerializerOptions { WriteIndented = true });
+
     }
 
     public async Task ImportAllRegionsAsync(ConvertToSql.Settings settings)

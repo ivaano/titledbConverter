@@ -29,6 +29,7 @@ public static class Program
             c.AddCommand<DownloadCommand>("download").WithExample("download", "I:\\titledb");
             c.AddCommand<ConvertToSql>("convert");
             c.AddCommand<ImportTitles>("import");
+            c.AddCommand<ImportCategories>("importcategories");
         });
         return app.Run(args);
     }
