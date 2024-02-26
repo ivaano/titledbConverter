@@ -1,5 +1,7 @@
-﻿using System.Collections.Concurrent;
+﻿using System.Collections;
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using GTranslate;
 using GTranslate.Translators;
@@ -47,26 +49,56 @@ public class ImportTitleService : IImportTitleService
         //await _dbService.ImportTitles(titles);
         await _dbService.BulkInsertTitlesAsync(titles);
    }
+
     
     public async Task ImportTitlesCategoriesAsync(string file)
     {
         var titles = await ReadTitlesJsonFile(file);
         var uniqueCategories = new HashSet<string>();
-        var categoryList = new List<KeyValuePair<string, string>>();
-        var cats = new Dictionary<string, List<KeyValuePair<string, string>>>(StringComparer.InvariantCultureIgnoreCase);
+        //var categoryList = new List<KeyValuePair<string, Tuple<string, string>>>();
+        //var categoryList = new List<KeyValuePair<string, (string Region, string Language)>>();
+        var categoryList = new List<(string Region, string Language, string Name)>();        
+        var cats = new Dictionary<string, List<(string Region, string Language, string Name)>>(StringComparer.InvariantCultureIgnoreCase);
+        //var cats = new Dictionary<string, List<KeyValuePair<string, Dictionary<string, string>>>>(StringComparer.InvariantCultureIgnoreCase);
         var toTranslate = new List<KeyValuePair<string, string>>();
+        //get unique categories
         foreach (var title in titles)
         {
             if (title.Category is not { Count: > 0 }) continue;
+
             categoryList.AddRange(from category in title.Category where uniqueCategories.Add(category) 
-                                  select new KeyValuePair<string, string>(title.Language, category));
+                                  select (title.Region, title.Language, category));
+
+            //categoryList.AddRange(from category in title.Category where uniqueCategories.Add(category)
+            //select new (Region: category, Language: title.Region, Name: title.Language));            
+            //select new KeyValuePair<string, (string Region, string Language)>(category, (title.Region, title.Language)));  
+            //select new KeyValuePair<string, Tuple<string, string>>(category, new Tuple<string, string>(title.Region, title.Language)));
         }
-        
+
+
+
+
         foreach (var category in categoryList)
         {
-            if (category.Key.Equals("en"))
+            if (category.Region.Equals("US") && category.Language.Equals("en"))
             {
-                if (cats.ContainsKey(category.Value)) continue;
+                if (cats.ContainsKey(category.Name)) continue;
+                cats.Add(category.Name, [category]);
+            }
+            else
+            {
+                toTranslate.Add(new KeyValuePair<string, string>(category.Region, category.Name));
+            }
+        }
+
+
+        var taco = 1;
+        /*
+        foreach (var category in categoryList)
+        {
+            if (category.Key.Equals("US"))
+            {
+                if (cats.ContainsKey(category.Key)) continue;
                 cats.Add(category.Value, [category]);
             }
             else
@@ -74,7 +106,7 @@ public class ImportTitleService : IImportTitleService
                 toTranslate.Add(category);
             }
         }
-        var translator = new GoogleTranslator();
+        var translator = new BingTranslator();
 
         foreach (var category in toTranslate)
         {
@@ -91,7 +123,15 @@ public class ImportTitleService : IImportTitleService
             
         }
         
-        
+        foreach (var cat in cats)
+        {
+            AnsiConsole.MarkupLine($"[springgreen3_1]{cat.Key}[/]");
+            foreach (var kvp in cat.Value)
+            {
+                AnsiConsole.MarkupLine($"[springgreen3_1]{kvp.Key} - {kvp.Value}[/]");
+            }
+
+        }
         
         
 /*

@@ -5,13 +5,19 @@ using Microsoft.EntityFrameworkCore;
 namespace titledbConverter.Models;
 
 [PrimaryKey("Id")]
-public class Category
+public class CategoryLanguage
 {
     public int Id { get; set; }
     [Column(TypeName = "VARCHAR")]
+    [StringLength(2)]
+    public string Region { get; set; }
+    [Column(TypeName = "VARCHAR")]
+    [StringLength(2)]
+    public string Language { get; set; }
+    [Column(TypeName = "VARCHAR")]
     [StringLength(30)]
     public string Name { get; set; }
+    public int CategoryId { get; set; }
     
-    public virtual ICollection<CategoryLanguage> Languages { get; set; }
-    public ICollection<Title> Titles { get; } = [];
+    public Category Category { get; set; }
 }

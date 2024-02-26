@@ -11,6 +11,8 @@ public class SqliteDbContext : DbContext
    public DbSet<Cnmt> Cnmts { get; set; }
    public DbSet<Version> Versions { get; set; }
    public DbSet<Region> Regions { get; set; }
+   public DbSet<Category> Categories { get; set; }
+   public DbSet<CategoryLanguage> CategoryLanguages { get; set; }
    
    public SqliteDbContext(DbContextOptions<SqliteDbContext> options) : base(options)
    {
@@ -47,6 +49,12 @@ public class SqliteDbContext : DbContext
            .HasMany(e => e.Categories)
            .WithMany(e => e.Titles)
            .UsingEntity<CategoryTitle>();
+
+       modelBuilder.Entity<Category>()
+           .HasMany(e => e.Languages)
+           .WithOne(e => e.Category)
+           .HasForeignKey(e => e.CategoryId);
+       
        
        var regions = new string[] {"AR", "AU", "BG", "BR", "CA", "CO", "CH", "CL", "CY",  "DE", "EE", "FR", "HR", "IE", "IT", "LT", "LU", "LV", "MT", "RO", "SI", "SK", "JP", "PE", "KR", "HK", "CN", "NZ", "AT", "BE", "CZ", "DK", "ES", "FI", "GR", "HU", "NL", "NO", "PL", "PT", "RU", "ZA", "SE", "GB", "MX", "US"};
        var regionObjects = regions.OrderBy(r => r)
