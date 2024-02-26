@@ -53,6 +53,10 @@ public class ImportTitleService : IImportTitleService
     
     public async Task ImportTitlesCategoriesAsync(string file)
     {
+        var classifier = new CategoryLanguageClassifier();
+        classifier.ClassifyCategoryLanguageAsync("JP", "ja", "アーケード");
+        
+        
         var titles = await ReadTitlesJsonFile(file);
         var uniqueCategories = new HashSet<string>();
         //var categoryList = new List<KeyValuePair<string, Tuple<string, string>>>();

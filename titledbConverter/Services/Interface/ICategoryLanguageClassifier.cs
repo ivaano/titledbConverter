@@ -2,5 +2,5 @@
 
 public interface ICategoryLanguageClassifier
 {
-    public Task ClassifyCategoryLanguageAsync(string Region, string Language, string Name);
+    public Task ClassifyCategoryLanguageAsync(string region, string language, string name);
 }
