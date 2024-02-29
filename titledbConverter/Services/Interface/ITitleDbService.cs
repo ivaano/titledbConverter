@@ -8,4 +8,6 @@ public interface ITitleDbService
     
     public Task ImportAllRegionsAsync(ConvertToSql.Settings settings);
 
+    public Task<Dictionary<string, List<string>>?> GetRegionLanguages(string fileLocation);
+
 }

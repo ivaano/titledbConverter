@@ -68,12 +68,22 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         _isVersionsLoaded = true;
         return _concurrentVersions;
     }
+
+    public async Task<Dictionary<string, List<string>>?> GetRegionLanguages(string fileLocation)
+    {
+        var countryLanguages = await File.ReadAllTextAsync(fileLocation)
+            .ContinueWith(fileContent => JsonSerializer.Deserialize<Dictionary<string, List<string>>>(fileContent.Result));
+        return countryLanguages;
+    }
     
     private async Task<ConcurrentDictionary<string, List<string>>> LoadRegionLanguagesAsync(string fileLocation, string preferredRegion, string preferredLanguage)
     {
         var stopwatch = Stopwatch.StartNew();
+        /*
         var countryLanguages = await File.ReadAllTextAsync(fileLocation)
             .ContinueWith(fileContent => JsonSerializer.Deserialize<Dictionary<string, List<string>>>(fileContent.Result));
+       */
+        var countryLanguages = await GetRegionLanguages(fileLocation);
         _regionLanguages = new ConcurrentDictionary<string, List<string>>(countryLanguages);
 
         _regionLanguagesDefault = new ConcurrentBag<RegionLanguage>(_regionLanguages
