@@ -1,6 +1,6 @@
 namespace titledbConverter.Utils;
 
-public class RegionLanguage
+public class RegionLanguageMap
 {
     public string Region { get; set; }
     

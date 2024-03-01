@@ -40,7 +40,8 @@ public class ImportCategories : AsyncCommand<ImportCategories.Settings>
         stopwatch.Stop();
         if (settings.ImportFile is not null)
         {
-            await _importTitleService.ImportTitlesCategoriesAsync(settings.ImportFile);
+           // await _importTitleService.ImportTitlesCategoriesAsync(settings.ImportFile);
+           await _importTitleService.ImportAllCategories();
         }
         Console.WriteLine($"Elapsed time: {stopwatch.Elapsed.TotalMilliseconds} ms");
         return 0;

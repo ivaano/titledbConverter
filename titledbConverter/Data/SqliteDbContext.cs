@@ -1,6 +1,8 @@
 ﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using titledbConverter.Models;
+using titledbConverter.Settings;
 using Region = titledbConverter.Models.Region;
 using Version = titledbConverter.Models.Version;
 
@@ -8,64 +10,87 @@ namespace titledbConverter.Data;
 
 public class SqliteDbContext : DbContext
 {
-   public DbSet<Title> Titles { get; set; }
-   public DbSet<Cnmt> Cnmts { get; set; }
-   public DbSet<Version> Versions { get; set; }
-   public DbSet<Region> Regions { get; set; }
-   public DbSet<Category> Categories { get; set; }
-   public DbSet<CategoryLanguage> CategoryLanguages { get; set; }
-   
-   public SqliteDbContext(DbContextOptions<SqliteDbContext> options) : base(options)
-   {
-   }
-   
-   protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-   {
-       if (!optionsBuilder.IsConfigured)
-       {
-           optionsBuilder.UseSqlite("Data Source=titles.db");    
-       }
-   }
-   
-   protected override void OnModelCreating(ModelBuilder modelBuilder)
-   {
-       modelBuilder.Entity<Title>()
-           .HasMany(e => e.Cnmts)
-           .WithOne(e => e.Title)
-           .HasForeignKey(e => e.TitleId)
-           .HasPrincipalKey(e => e.Id);
-       
-       modelBuilder.Entity<Title>()
-           .HasMany(e => e.Versions)
-           .WithOne(e => e.Title)
-           .HasForeignKey(e => e.TitleId)
-           .HasPrincipalKey(e => e.Id);
+    private readonly AppSettings _configuration;
+    public DbSet<Title> Titles { get; set; }
+    public DbSet<Cnmt> Cnmts { get; set; }
+    public DbSet<Version> Versions { get; set; }
+    public DbSet<Region> Regions { get; set; }
+    public DbSet<Category> Categories { get; set; }
+    public DbSet<CategoryLanguage> CategoryLanguages { get; set; }
 
-       modelBuilder.Entity<Title>()
-           .HasMany(e => e.Regions)
-           .WithMany(e => e.Titles)
-           .UsingEntity<RegionTitle>();
-      
-       modelBuilder.Entity<Title>()
-           .HasMany(e => e.Categories)
-           .WithMany(e => e.Titles)
-           .UsingEntity<CategoryTitle>();
+    public SqliteDbContext(DbContextOptions<SqliteDbContext> options, IOptions<AppSettings> configuration) :
+        base(options)
+    {
+        _configuration = configuration.Value;
+    }
 
-       modelBuilder.Entity<Category>()
-           .HasMany(e => e.Languages)
-           .WithOne(e => e.Category)
-           .HasForeignKey(e => e.CategoryId);
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        if (!optionsBuilder.IsConfigured)
+        {
+            optionsBuilder.UseSqlite("Data Source=titles.db");
+        }
+    }
 
-       var countryLanguagesJson = File.ReadAllText("/home/ivan/titledb/languages.json");
-       var countryLanguages = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(countryLanguagesJson);
-       var regions = countryLanguages.Keys;
-       
-       //var regions = new string[] {"AR", "AU", "BG", "BR", "CA", "CO", "CH", "CL", "CY",  "DE", "EE", "FR", "HR", "IE", "IT", "LT", "LU", "LV", "MT", "RO", "SI", "SK", "JP", "PE", "KR", "HK", "CN", "NZ", "AT", "BE", "CZ", "DK", "ES", "FI", "GR", "HU", "NL", "NO", "PL", "PT", "RU", "ZA", "SE", "GB", "MX", "US"};
-       var regionObjects = regions.OrderBy(r => r)
-           .Select((r, i) => new Region { Id = i + 1, Name = r })
-           .ToArray();
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Title>()
+            .HasMany(e => e.Cnmts)
+            .WithOne(e => e.Title)
+            .HasForeignKey(e => e.TitleId)
+            .HasPrincipalKey(e => e.Id);
 
-       modelBuilder.Entity<Region>().HasData(regionObjects);
+        modelBuilder.Entity<Title>()
+            .HasMany(e => e.Versions)
+            .WithOne(e => e.Title)
+            .HasForeignKey(e => e.TitleId)
+            .HasPrincipalKey(e => e.Id);
 
-   }
+        modelBuilder.Entity<Title>()
+            .HasMany(e => e.Regions)
+            .WithMany(e => e.Titles)
+            .UsingEntity<RegionTitle>();
+        
+        modelBuilder.Entity<Region>()
+            .HasMany(e => e.Languages)
+            .WithMany(e => e.Regions)
+            .UsingEntity<RegionLanguage>();
+
+        modelBuilder.Entity<Title>()
+            .HasMany(e => e.Categories)
+            .WithMany(e => e.Titles)
+            .UsingEntity<CategoryTitle>();
+
+        modelBuilder.Entity<Category>()
+            .HasMany(e => e.Languages)
+            .WithOne(e => e.Category)
+            .HasForeignKey(e => e.CategoryId);
+
+        var countryLanguagesJson = File.ReadAllText(Path.Join(_configuration.DownloadPath, "languages.json"));
+        var countryLanguages = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(countryLanguagesJson);
+
+        var regionId = 0;
+        var langId = 0;
+        var uniqueLanguages = new Dictionary<string, int>();
+        foreach (var region in countryLanguages.Keys)
+        {
+            regionId++;
+            var regionObject = new Region {Id = regionId, Name = region };
+            modelBuilder.Entity<Region>().HasData(regionObject);
+            
+            var languages = countryLanguages[region];
+            foreach (var language in languages)
+            {
+                if (!uniqueLanguages.TryGetValue(language, out var existingLangId))
+                {
+                    langId++;
+                    uniqueLanguages.Add(language, langId);
+                    modelBuilder.Entity<Language>().HasData(new Language { Id = langId, LanguageCode = language });
+                    existingLangId = langId;
+                }
+                modelBuilder.Entity<RegionLanguage>().HasData(new RegionLanguage { RegionId = regionObject.Id, LanguageId = existingLangId });
+            }
+
+        }
+    }
 }

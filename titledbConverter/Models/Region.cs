@@ -11,5 +11,6 @@ public class Region
     [Column(TypeName = "VARCHAR")]
     [StringLength(2)]
     public string Name { get; set; }
+    public virtual ICollection<Language>? Languages { get; set; }
     public ICollection<Title> Titles { get; } = [];
 }

@@ -31,7 +31,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Datasets\unprocessed\" />
       <Folder Include="Migrations\" />
     </ItemGroup>
 

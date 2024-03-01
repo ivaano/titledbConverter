@@ -21,7 +21,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     private ConcurrentDictionary<string, ConcurrentDictionary<string, TitleDbCnmt>> _concurrentCnmts = default!;
     private ConcurrentDictionary<string, TitleDbVersion> _concurrentVersions = default!;
     private ConcurrentDictionary<string, List<string>> _regionLanguages = default!;
-    private ConcurrentBag<RegionLanguage> _regionLanguagesDefault = default!;
+    private ConcurrentBag<RegionLanguageMap> _regionLanguagesDefault = default!;
     private ConcurrentDictionary<string, Lazy<TitleDbTitle>> _titlesDict = [];
     private ConcurrentBag<Region> _regions = [];
     private bool _isCnmtsLoaded = false;
@@ -86,8 +86,8 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         var countryLanguages = await GetRegionLanguages(fileLocation);
         _regionLanguages = new ConcurrentDictionary<string, List<string>>(countryLanguages);
 
-        _regionLanguagesDefault = new ConcurrentBag<RegionLanguage>(_regionLanguages
-            .SelectMany(pair => pair.Value.Select(lang => new RegionLanguage
+        _regionLanguagesDefault = new ConcurrentBag<RegionLanguageMap>(_regionLanguages
+            .SelectMany(pair => pair.Value.Select(lang => new RegionLanguageMap
             {
                 Region = pair.Key,
                 Language = lang,
@@ -254,7 +254,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         }
     }
 
-    private void AddOrUpdateTitle(KeyValuePair<string, TitleDbTitle> game, RegionLanguage regionLanguage)
+    private void AddOrUpdateTitle(KeyValuePair<string, TitleDbTitle> game, RegionLanguageMap regionLanguage)
     {
         if (_titlesDict.TryGetValue(game.Value.Id, out var value))
         {
@@ -307,7 +307,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         }
     }
     
-    private void ProcessTitleDto(KeyValuePair<string, TitleDbTitle> game, RegionLanguage regionLanguage)
+    private void ProcessTitleDto(KeyValuePair<string, TitleDbTitle> game, RegionLanguageMap regionLanguage)
     {
         if (!string.IsNullOrEmpty(game.Value.Id) )
         {
@@ -315,7 +315,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         }
     }
 
-    private async Task ImportRegionAsync(RegionLanguage regionLanguage, string downloadPath)
+    private async Task ImportRegionAsync(RegionLanguageMap regionLanguage, string downloadPath)
     {
 
         var regionFile = Path.Join(downloadPath, $"{regionLanguage.Region}.{regionLanguage.Language}.json");
@@ -421,7 +421,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
 
     public async Task ImportAllRegionsAsync(ConvertToSql.Settings settings)
     {
-        var regions = dbService.GetRegions();
+        var regions = await dbService.GetRegionsAsync();
         _regions = new ConcurrentBag<Region>(regions);
         
         await Task.WhenAll(

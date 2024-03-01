@@ -44,6 +44,7 @@ public static class Program
                 services.AddDbContext<SqliteDbContext>(options =>
                 {
                     options.UseSqlite(hostContext.Configuration.GetConnectionString("SqliteConnection"));
+                   // options.EnableSensitiveDataLogging(true);
                 });
                 services.AddScoped<ITitleDbService, TitleDbService>();
                 services.AddScoped<IImportTitleService, ImportTitleService>();

@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using CsvHelper;
+using CsvHelper.Configuration;
 using GTranslate;
 using GTranslate.Translators;
 using Microsoft.Extensions.Logging;
@@ -18,14 +20,14 @@ public class ImportTitleService : IImportTitleService
 {
     private readonly IDbService _dbService;
     private readonly ILogger<ImportTitleService> _logger;
-    private ConcurrentBag<Region> _regions;
+    //private ConcurrentBag<Region> _regions;
     
     public ImportTitleService(IDbService dbService, ILogger<ImportTitleService> logger)
     {
         _dbService = dbService;
         _logger = logger;
-        var regions = _dbService.GetRegions();
-        _regions = new ConcurrentBag<Region>(regions);
+       // var regions = _dbService.GetRegions();
+       // _regions = new ConcurrentBag<Region>(regions);
     }
 
     private async Task<IEnumerable<TitleDbTitle>> ReadTitlesJsonFile(string fileLocation)
@@ -40,6 +42,14 @@ public class ImportTitleService : IImportTitleService
         stopwatch.Stop();
         return titles;
     }
+
+    private async Task<IEnumerable<(string Region, string LanguageCode)>> GetRegionLanguages()
+    {
+        var regions = await _dbService.GetRegionsAsync();
+        return regions.SelectMany(region => region.Languages,
+                (region, language) => (Region: region.Name, LanguageCode: language.LanguageCode))
+            .ToList();
+    }
     
 
     
@@ -49,6 +59,66 @@ public class ImportTitleService : IImportTitleService
         //await _dbService.ImportTitles(titles);
         await _dbService.BulkInsertTitlesAsync(titles);
    }
+
+    private async Task<IEnumerable<CategoryRegionLanguage>> GetCategoriesFromTsv(string tsvFile)
+    {
+        using var reader = new StreamReader(tsvFile);
+        var config = CsvConfiguration.FromAttributes<CategoryRegionLanguage>();
+        using var csv = new CsvReader(reader, config);
+
+        var records = csv.GetRecords<CategoryRegionLanguage>();
+        return records.ToList();
+        /*
+         foreach (var category in records)
+         {
+             Console.WriteLine(category);
+         }
+         */
+    }
+
+
+    public async Task ImportAllCategories()
+    {
+        var regionLanguages = await GetRegionLanguages();
+        // Read all categories from the dataset
+        var datasetFolderPath = Path.Combine(Directory.GetCurrentDirectory(), "Datasets");
+        
+        var categories = _dbService.GetCategoriesAsDict();
+        
+        var usCategories = await GetCategoriesFromTsv(Path.Combine(datasetFolderPath, "categories.US.en.tsv"));
+
+        var categoriesLanguages = usCategories.Select(category => new CategoryLanguage
+            {
+                Region = "US",
+                Language = "en",
+                Name = category.Original
+            })
+            .ToList();
+
+        await _dbService.SaveCategoryLanguages(categoriesLanguages);
+        
+        
+        foreach (var regionLanguage in regionLanguages)
+        {
+            var tsvFile = Path.Combine(datasetFolderPath, $"categories.{regionLanguage.Region}.{regionLanguage.LanguageCode}.tsv");
+            if (File.Exists(tsvFile))
+            {
+                var regionCategories = await GetCategoriesFromTsv(Path.Combine(datasetFolderPath, tsvFile));
+
+                categoriesLanguages = regionCategories.Select(category => new CategoryLanguage
+                    {
+                        Region = regionLanguage.Region,
+                        Language = regionLanguage.LanguageCode,
+                        Name = category.Original
+                    })
+                    .ToList();
+
+                await _dbService.SaveCategoryLanguages(categoriesLanguages);
+
+            }
+        }
+        
+    }
 
     
     public async Task ImportTitlesCategoriesAsync(string file)

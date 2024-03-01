@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using EFCore.BulkExtensions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using titledbConverter.Data;
@@ -59,6 +60,42 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         stopwatch.Stop();
         AnsiConsole.MarkupLine($"[springgreen3_1]Imported all in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
     }
+    
+    public async Task<Dictionary<string, Category>> GetCategoriesAsDict()
+    {
+       return context.Categories.ToDictionary(category => category.Name, category => category);
+    }
+
+    public async Task<bool> SaveCategoryLanguages(IEnumerable<CategoryLanguage> categoryLanguages)
+    {
+        var categoryNames = context.Categories.ToDictionary(category => category.Name, category => category);
+        var existingCategoryNames = context.CategoryLanguages.ToList();
+        foreach (var categoryLanguage in categoryLanguages)
+        {
+            var exists = existingCategoryNames
+                .Where(x => x.Name == categoryLanguage.Name)
+                .Where(x => x.Region == categoryLanguage.Region)
+                .FirstOrDefault(x => x.Language == categoryLanguage.Language);
+
+            if (exists is not null) continue;
+            
+            if(categoryNames.TryGetValue(categoryLanguage.Name, out var categoryName))
+            {
+                categoryLanguage.Category = categoryName;
+               
+                context.CategoryLanguages.Add(categoryLanguage);
+            }
+            else
+            {
+                var newCategoryName = new Category {Name = categoryLanguage.Name};
+                categoryLanguage.Category = newCategoryName;
+                context.CategoryLanguages.Add(categoryLanguage);
+            }
+        }
+
+        await context.SaveChangesAsync();
+        return true;
+    }
 
     private async Task BulkInsertAndUpdate(List<Title> titleEntities, List<RegionTitle> regionTitles,
         Dictionary<string, List<string>> regionTitlesTitleId, Dictionary<string, int> regionDictionary)
@@ -83,6 +120,11 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         titleEntities.Clear();
         regionTitles.Clear();
         regionTitlesTitleId.Clear();
+    }
+
+    public async Task<ICollection<Region>> GetRegionsAsync()
+    {
+        return await context.Regions.Include(region => region.Languages).ToListAsync();
     }
 
     public async Task ImportTitles(IEnumerable<TitleDbTitle> titles)
@@ -214,10 +256,7 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         throw new NotImplementedException();
     }
 
-    public List<Region> GetRegions()
-    {
-        return context.Regions.ToList();
-    }
+
 
     protected virtual void Dispose(bool disposing)
     {
