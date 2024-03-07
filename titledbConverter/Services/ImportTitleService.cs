@@ -119,10 +119,31 @@ public class ImportTitleService : IImportTitleService
             var tsvFile = Path.Combine(datasetFolderPath, $"categories.{regionLanguage.Region}.{regionLanguage.LanguageCode}.tsv");
             if (!File.Exists(tsvFile)) continue;
             var regionCategories = (await GetCategoriesFromTsv(Path.Combine(datasetFolderPath, tsvFile))).ToList();
-           
-            var existingCategories = categoriesLanguages.Value.Keys.Intersect(regionCategories.Select(c => $"{regionLanguage.Region}-{regionLanguage.LanguageCode}.{c.Translated}"));
-            var existingCategoriesList = existingCategories.ToList();
-            if (existingCategoriesList.Count == 0)
+
+            if (categoriesLanguages.IsSuccess)
+            {
+                var existingCategories = categoriesLanguages.Value.Keys.Intersect(regionCategories.Select(c => $"{regionLanguage.Region}-{regionLanguage.LanguageCode}.{c.Original}"));
+                var existingCategoriesList = existingCategories.ToList();
+                if (existingCategoriesList.Count == 0)
+                {
+                    var categoryLanguages = regionCategories.Select(category => new CategoryLanguage
+                        {
+                            Region = regionLanguage.Region,
+                            Language = regionLanguage.LanguageCode,
+                            Name = category.Original,
+                            CategoryId = categories.Value[category.Translated].Id
+                        })
+                        .ToList();
+                    await _dbService.SaveCategoryLanguages(categoryLanguages);
+
+                }
+                else
+                {
+                    //todo handle existing categories
+                    regionCategories = regionCategories.Where(c => !existingCategoriesList.Contains($"{regionLanguage.Region}-{regionLanguage.LanguageCode}.{c.Translated}")).ToList();
+                }
+            }
+            else
             {
                 var categoryLanguages = regionCategories.Select(category => new CategoryLanguage
                     {
@@ -133,12 +154,8 @@ public class ImportTitleService : IImportTitleService
                     })
                     .ToList();
                 await _dbService.SaveCategoryLanguages(categoryLanguages);
-
-            } else
-            {
-                //todo handle existing categories
-                //regionCategories = regionCategories.Where(c => !existingCategoriesList.Contains($"{regionLanguage.Region}-{regionLanguage.LanguageCode}.{c.Translated}")).ToList();
             }
+
         }
         
     }
