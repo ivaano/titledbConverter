@@ -76,6 +76,15 @@ public class ImportTitleService : IImportTitleService
          */
     }
 
+    private static List<CategoryLanguage> CreateCategoryLanguages(IEnumerable<string> categoryNames)
+    {
+        return categoryNames.Select(category => new CategoryLanguage
+        {
+            Region = "US",
+            Language = "en",
+            Name = category
+        }).ToList();
+    }
 
     public async Task ImportAllCategories()
     {
@@ -83,38 +92,52 @@ public class ImportTitleService : IImportTitleService
         // Read all categories from the dataset
         var datasetFolderPath = Path.Combine(Directory.GetCurrentDirectory(), "Datasets");
         
-        var categories = _dbService.GetCategoriesAsDict();
+        var categories = await _dbService.GetCategoriesAsDict();
         
-        var usCategories = await GetCategoriesFromTsv(Path.Combine(datasetFolderPath, "categories.US.en.tsv"));
+        var usCategories = (await GetCategoriesFromTsv(Path.Combine(datasetFolderPath, "categories.US.en.tsv"))).ToList();
+        var usCategoriesDict = usCategories.ToDictionary(category => category.Original, category => category);
 
-        var categoriesLanguages = usCategories.Select(category => new CategoryLanguage
+        var categoryNames = categories.IsFailed ? 
+            usCategories.Select(c => c.Original) :
+            categories.Value.Keys.Except(usCategoriesDict.Keys);
+
+        var missingCategories = CreateCategoryLanguages(categoryNames);
+
+        if (missingCategories.Count > 0)
+        {
+            var saveResult = await _dbService.SaveCategories(missingCategories);
+            if (saveResult.IsSuccess)
             {
-                Region = "US",
-                Language = "en",
-                Name = category.Original
-            })
-            .ToList();
-
-        await _dbService.SaveCategoryLanguages(categoriesLanguages);
+                categories = await _dbService.GetCategoriesAsDict();
+            }
+        } 
         
+        var categoriesLanguages = await _dbService.GetCategoriesLanguagesAsDict();
         
         foreach (var regionLanguage in regionLanguages)
         {
             var tsvFile = Path.Combine(datasetFolderPath, $"categories.{regionLanguage.Region}.{regionLanguage.LanguageCode}.tsv");
-            if (File.Exists(tsvFile))
+            if (!File.Exists(tsvFile)) continue;
+            var regionCategories = (await GetCategoriesFromTsv(Path.Combine(datasetFolderPath, tsvFile))).ToList();
+           
+            var existingCategories = categoriesLanguages.Value.Keys.Intersect(regionCategories.Select(c => $"{regionLanguage.Region}-{regionLanguage.LanguageCode}.{c.Translated}"));
+            var existingCategoriesList = existingCategories.ToList();
+            if (existingCategoriesList.Count == 0)
             {
-                var regionCategories = await GetCategoriesFromTsv(Path.Combine(datasetFolderPath, tsvFile));
-
-                categoriesLanguages = regionCategories.Select(category => new CategoryLanguage
+                var categoryLanguages = regionCategories.Select(category => new CategoryLanguage
                     {
                         Region = regionLanguage.Region,
                         Language = regionLanguage.LanguageCode,
-                        Name = category.Original
+                        Name = category.Original,
+                        CategoryId = categories.Value[category.Translated].Id
                     })
                     .ToList();
+                await _dbService.SaveCategoryLanguages(categoryLanguages);
 
-                await _dbService.SaveCategoryLanguages(categoriesLanguages);
-
+            } else
+            {
+                //todo handle existing categories
+                //regionCategories = regionCategories.Where(c => !existingCategoriesList.Contains($"{regionLanguage.Region}-{regionLanguage.LanguageCode}.{c.Translated}")).ToList();
             }
         }
         

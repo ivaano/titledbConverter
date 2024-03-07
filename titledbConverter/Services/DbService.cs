@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using EFCore.BulkExtensions;
+using FluentResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -61,12 +62,24 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         AnsiConsole.MarkupLine($"[springgreen3_1]Imported all in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
     }
     
-    public async Task<Dictionary<string, Category>> GetCategoriesAsDict()
+    public async Task<Result<Dictionary<string, Category>>> GetCategoriesAsDict()
     {
-       return context.Categories.ToDictionary(category => category.Name, category => category);
+        var categories = await context.Categories.ToListAsync();
+        return categories.Count == 0 ? Result.Fail<Dictionary<string, Category>>("No categories found") : 
+            Result.Ok(categories.ToDictionary(category => category.Name, category => category));
     }
 
-    public async Task<bool> SaveCategoryLanguages(IEnumerable<CategoryLanguage> categoryLanguages)
+    public async Task<Result<Dictionary<string, CategoryLanguage>>> GetCategoriesLanguagesAsDict()
+    { 
+        var categories = await context.CategoryLanguages.Include(cl => cl.Category).ToListAsync();
+        return categories.Count == 0 ? Result.Fail<Dictionary<string, CategoryLanguage>>("No categories found") : 
+            Result.Ok(categories.ToDictionary(cl => 
+                    $"{cl.Region}-{cl.Language}.{cl.Name}", 
+                cl => cl));
+    }
+
+
+    public async Task<Result<int>> SaveCategories(IEnumerable<CategoryLanguage> categoryLanguages)
     {
         var categoryNames = context.Categories.ToDictionary(category => category.Name, category => category);
         var existingCategoryNames = context.CategoryLanguages.ToList();
@@ -93,8 +106,15 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             }
         }
 
-        await context.SaveChangesAsync();
-        return true;
+        var result = await context.SaveChangesAsync();
+        return result > 0 ? Result.Ok(result) : Result.Fail("No categories saved");
+    }
+
+    public async Task<Result<int>> SaveCategoryLanguages(IEnumerable<CategoryLanguage> categoryLanguages)
+    {
+        context.CategoryLanguages.AddRange(categoryLanguages);
+        var result = await context.SaveChangesAsync();
+        return result > 0 ? Result.Ok(result) : Result.Fail("No categories saved");
     }
 
     private async Task BulkInsertAndUpdate(List<Title> titleEntities, List<RegionTitle> regionTitles,
