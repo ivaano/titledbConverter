@@ -59,7 +59,7 @@ public class SqliteDbContext : DbContext
         modelBuilder.Entity<Title>()
             .HasMany(e => e.Categories)
             .WithMany(e => e.Titles)
-            .UsingEntity<CategoryTitle>();
+            .UsingEntity<TitleCategory>();
 
         modelBuilder.Entity<Category>()
             .HasMany(e => e.Languages)

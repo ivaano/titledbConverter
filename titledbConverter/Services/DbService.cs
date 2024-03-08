@@ -128,14 +128,26 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         {
             foreach (var region in regionTitlesTitleId[titleEntity])
             {
-                if (regionDictionary.TryGetValue(region, out var regionId))
+                try
                 {
-                    regionTitles.Add(new RegionTitle() { RegionId = regionId, TitleId = titleDictionary[titleEntity] });
+                    if (regionDictionary.TryGetValue(region, out var regionId))
+                    {
+                        regionTitles.Add(new RegionTitle()
+                            { RegionId = regionId, TitleId = titleDictionary[titleEntity] });
+                    }
                 }
+                catch (Exception e)
+                {
+                    AnsiConsole.MarkupLine($"[red]Error: {e.Message}[/]");
+                }
+
             }
         }
 
-        await context.BulkInsertAsync(regionTitles, new BulkConfig() { SetOutputIdentity = true, PreserveInsertOrder = true });
+       //var repeatedElements = regionTitles.Skip(2750).Take(10);
+            
+        
+        await context.BulkInsertAsync(regionTitles, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true });
 
         titleEntities.Clear();
         regionTitles.Clear();
@@ -170,25 +182,6 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
                     if (regionDictionary.TryGetValue(titleRegion, out var regionId))
                     {
                         mappedTitle.Regions.Add(context.Regions.Local.Single(x => x.Id == regionId));
-                        /*
-                        var region = new Region() { Id = regionId };
-                        //post.Tags.Add(context.Tags.Local.Single(x => x.Id == 1));
-                        // Check if the region is already being tracked
-                        var local = context.Set<Region>()
-                            .Local
-                            .FirstOrDefault(entry => entry.Id.Equals(region.Id));
-                        // If not, attach it
-                        if (local == null)
-                        {
-                            context.Regions.Attach(region);
-                            mappedTitle.Regions.Add(region);
-                        }
-                        else
-                        {
-                            // Use the tracked instance instead
-                            mappedTitle.Regions.Add(local);
-                        }
-                        */
                     }
                 }
             }

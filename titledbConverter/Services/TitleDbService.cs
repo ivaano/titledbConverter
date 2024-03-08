@@ -212,8 +212,6 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     {
         if (title.Ids is not null && title.Ids.Count > 1)
         {
-            //var objectCopier = new ObjectCopier();
-
             foreach (var id in title.Ids)
             {
                 if (_titlesDict.TryGetValue(id, out var value)) continue;
@@ -273,7 +271,6 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
                     var exists = title.Regions.Find(s => s == regionLanguage.Region);
                     if (exists is not null) return;
                     title.Regions.Add(regionLanguage.Region);
-                    title.Regions.Sort();
                 }
                 else
                 {
@@ -321,7 +318,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         var regionFile = Path.Join(downloadPath, $"{regionLanguage.Region}.{regionLanguage.Language}.json");
         var regionTitles = await GetTitlesJsonFilesAsync(regionFile);
         AnsiConsole.MarkupLineInterpolated($"[bold green]Processing {regionFile}[/]");
-        var options = new ParallelOptions { MaxDegreeOfParallelism = -1 };
+        var options = new ParallelOptions { MaxDegreeOfParallelism = 2 };
 
         //Parallel.ForEach(regionTitles, options, kvp => ProcessTitle(kvp, regionLanguage));
         Parallel.ForEach(regionTitles, options, kvp => ProcessTitleDto(kvp, regionLanguage));
@@ -412,11 +409,23 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
 
     private async Task SaveJsonTitles(string fileName)
     {
-        await using FileStream createStream = File.Create(fileName);
-        //await JsonSerializer.SerializeAsync(createStream, _titlesDict.Values.Select(x => x.Value), new JsonSerializerOptions { WriteIndented = true });
+        await using var createStream = File.Create(fileName);
         var sortedTitlesDict = new SortedDictionary<string, Lazy<TitleDbTitle>>(_titlesDict);
         await JsonSerializer.SerializeAsync(createStream, sortedTitlesDict.Values.Select(x => x.Value), new JsonSerializerOptions { WriteIndented = true });
+    }
 
+    private async Task CleanRegions()
+    {
+        foreach (var title in _titlesDict.Values)
+        {
+            if (title.Value.Regions is null) continue;
+            // Remove nulls
+            title.Value.Regions = title.Value.Regions.Where(region => region != null).ToList();
+
+            // Sort regions
+            title.Value.Regions.Sort();
+
+        }
     }
 
     public async Task ImportAllRegionsAsync(ConvertToSql.Settings settings)
@@ -444,25 +453,16 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         var ncas = await LoadNcasAsync(Path.Join(settings.DownloadPath, "ncas.json"));
         ImportNcas(ncas);
         ImportVersionsTxt(Path.Join(settings.DownloadPath, "versions.txt"));
-        //await TitleComparer(settings);
 
-        /*
-        foreach (var reg in _regions)
-        {
-            var mx = _titlesDict.Values.Where(x => x.Value.Region == reg.Name).Select(x => x.Value).ToList();
-            AnsiConsole.MarkupLine($"[bold green]Region: {reg.Name} Count: {mx.Count}[/]");
-        }
-        */
         var baseGames = _titlesDict.Values.Where(x => x.Value.IsBase).Select(x => x.Value).ToList();
         var dlcGames = _titlesDict.Values.Where(x => x.Value.IsDlc).Select(x => x.Value).ToList();
         var updateGames = _titlesDict.Values.Where(x => x.Value.IsUpdate).Select(x => x.Value).ToList();
+        await CleanRegions();
         AnsiConsole.MarkupLine($"[bold green]Titles Count Count: {_titlesDict.Values.Count}[/]");
         AnsiConsole.MarkupLine($"[bold green]Base Titles: {baseGames.Count}[/]");
         AnsiConsole.MarkupLine($"[bold green]DLC Titles: {dlcGames.Count}[/]");
         AnsiConsole.MarkupLine($"[bold green]Update Titles: {updateGames.Count}[/]");
         await SaveJsonTitles(Path.Join(settings.DownloadPath, "titles-ivan.json"));
-        //await dbService.BulkInsertTitlesAsync(peta);
-        //await dbService.BulkInsertTitlesAsync(_titles.ToList());
     }
 
 }

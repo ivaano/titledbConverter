@@ -1,6 +1,6 @@
 ﻿namespace titledbConverter.Models;
 
-public class CategoryTitle
+public class TitleCategory
 {
     public int TitleId { get; set; }
     public int CategoryId { get; set; }
