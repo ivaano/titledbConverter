@@ -10,4 +10,5 @@ public class Language
     [StringLength(2)]
     public string LanguageCode { get; set; }
     public ICollection<Region> Regions { get; } = [];
+    public ICollection<Title> Titles { get; } = [];
 }

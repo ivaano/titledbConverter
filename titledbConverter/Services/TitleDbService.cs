@@ -418,13 +418,18 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     {
         foreach (var title in _titlesDict.Values)
         {
-            if (title.Value.Regions is null) continue;
-            // Remove nulls
-            title.Value.Regions = title.Value.Regions.Where(region => region != null).ToList();
-
-            // Sort regions
-            title.Value.Regions.Sort();
-
+            if (title.Value.Regions is not null)
+            {
+                title.Value.Regions = title.Value.Regions.Distinct().Where(region => region != null).ToList();
+               
+                title.Value.Regions.Sort();
+            }
+            
+            if (title.Value.Languages is not null)
+            {
+                title.Value.Languages = title.Value.Languages.Distinct().Where(lang => lang != null).ToList();
+                title.Value.Languages.Sort();
+            }
         }
     }
 

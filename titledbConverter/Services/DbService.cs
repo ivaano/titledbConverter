@@ -14,6 +14,9 @@ namespace titledbConverter.Services;
 
 public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDbService, IDisposable
 {
+    private Dictionary<string, int> _languageTable = default!;
+    private bool _dataFetched = false;
+    
     public Task<int> AddTitleAsync(Title title)
     {
         context.Titles.Add(title);
@@ -26,17 +29,26 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
 
         return categoryLanguages;
     }
+    
+    private async Task FetchData()
+    {
+        if (_dataFetched) return;
+        _languageTable = await context.Languages.ToDictionaryAsync(language => language.LanguageCode, language => language.Id);
+        _dataFetched = true;
+    }
    
     
     public async Task BulkInsertTitlesAsync(IEnumerable<TitleDbTitle> titles)
     {
         var stopwatch = Stopwatch.StartNew();
+        //db data
         var regionDictionary = context.Regions.ToDictionary(region => region.Name, region => region.Id);
         var categoryLanguageDictionary = context.CategoryLanguages.ToDictionary(cl => $"{cl.Region}-{cl.Language}.{cl.Name}", cl => cl.CategoryId);
+        
         var titleEntities = new List<Title>();
-        var regionTitles = new List<RegionTitle>();
-        var regionTitlesTitleId = new Dictionary<string, List<string>>();
-        var titleCategories = new Dictionary<string, List<string>>();
+        var titlesWithRegions = new Dictionary<string, List<string>>();
+        var titlesWithCategories = new Dictionary<string, List<string>>();
+        var titlesWithLanguages = new Dictionary<string, List<string>>();
         
         foreach (var title in titles)
         {
@@ -44,13 +56,19 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             if (title.Regions is { Count: > 0 })
             {
                 mappedTitle.Regions = new List<Region>();
-                regionTitlesTitleId.Add(title.Id, title.Regions);
+                titlesWithRegions.Add(title.Id, title.Regions);
             }
 
             if (title.Category is { Count: > 0 })
             {
                 mappedTitle.Categories = new List<Category>();
-                titleCategories.Add(title.Id, CategoryLanguageMapper(title));
+                titlesWithCategories.Add(title.Id, CategoryLanguageMapper(title));
+            }
+            
+            if (title.Languages is { Count: > 0 })
+            {
+                mappedTitle.Languages = new List<Language>();
+                titlesWithLanguages.Add(title.Id, title.Languages);
             }
 
 
@@ -58,13 +76,13 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
 
             if (titleEntities.Count >= 1000)
             {
-                await BulkInsertAndUpdate(titleEntities, regionTitles, regionTitlesTitleId, regionDictionary, categoryLanguageDictionary, titleCategories);
+                await BulkInsertAndUpdate(titleEntities,  titlesWithRegions, regionDictionary, categoryLanguageDictionary, titlesWithCategories, titlesWithLanguages);
             }
         }
 
         if (titleEntities.Count > 0)
         {
-            await BulkInsertAndUpdate(titleEntities, regionTitles, regionTitlesTitleId, regionDictionary, categoryLanguageDictionary, titleCategories);
+            await BulkInsertAndUpdate(titleEntities, titlesWithRegions, regionDictionary, categoryLanguageDictionary, titlesWithCategories, titlesWithLanguages);
         }
 
         stopwatch.Stop();
@@ -126,71 +144,97 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         return result > 0 ? Result.Ok(result) : Result.Fail("No categories saved");
     }
 
-    private async Task BulkInsertAndUpdate(List<Title> titleEntities, List<RegionTitle> regionTitles,
+    
+    private async Task BulkInsertAndUpdate(List<Title> titleEntities, 
         Dictionary<string, List<string>> regionTitlesTitleId, Dictionary<string, int> regionDictionary, 
-        Dictionary<string, int> categoryLanguageDictionary,  Dictionary<string, List<string>> titleCategories)
+        Dictionary<string, int> categoryLanguageDictionary,  Dictionary<string, List<string>> titleCategories, 
+        Dictionary<string, List<string>> titlesWithLanguages)
     {
-        await context.BulkInsertAsync(titleEntities, new BulkConfig() { SetOutputIdentity = true, PreserveInsertOrder = true });
+        await FetchData();
+        var regionTitles = new List<RegionTitle>();
         var categoryTitles = new List<TitleCategory>();
+        var titleLanguages = new List<TitleLanguage>();
         
-        //regions
+        // Bulk insert titles
+        await context.BulkInsertAsync(titleEntities, new BulkConfig() { SetOutputIdentity = true, PreserveInsertOrder = true });
         var titleDictionary = titleEntities.ToDictionary(t => t.ApplicationId, t => t.Id);
-        foreach (var titleEntity in regionTitlesTitleId.Keys)
-        {
-            foreach (var region in regionTitlesTitleId[titleEntity])
-            {
-                try
-                {
-                    if (regionDictionary.TryGetValue(region, out var regionId))
-                    {
-                        regionTitles.Add(new RegionTitle()
-                            { RegionId = regionId, TitleId = titleDictionary[titleEntity] });
-                    }
-                }
-                catch (Exception e)
-                {
-                    AnsiConsole.MarkupLine($"[red]Error: {e.Message}[/]");
-                }
 
-            }
-        }
+        // Bulk insert region titles
+        regionTitles.AddRange(regionTitlesTitleId.Keys.SelectMany(titleEntity => 
+            regionTitlesTitleId[titleEntity].Where(region => regionDictionary.TryGetValue(region, out var regionId))
+                .Select(region => new RegionTitle() { RegionId = regionDictionary[region], TitleId = titleDictionary[titleEntity] })));
         await context.BulkInsertAsync(regionTitles, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true });
-        
-        //categories
-        foreach (var titleCategory in titleCategories)
-        {
-            foreach (var category in titleCategory.Value)
-            {
-                try
-                {
-                    if (categoryLanguageDictionary.TryGetValue(category, out var categoryId))
-                    {
-                        categoryTitles.Add(new TitleCategory
-                            { CategoryId = categoryId, TitleId = titleDictionary[titleCategory.Key] });
-                    }
-                }
-                catch (Exception e)
-                {
-                    AnsiConsole.MarkupLine($"[red]Error: {e.Message}[/]");
-                }
 
-            }
-        }
-        
+        // Bulk insert category titles
+        categoryTitles.AddRange(titleCategories.SelectMany(titleCategory => 
+            titleCategory.Value.Where(category => categoryLanguageDictionary.TryGetValue(category, out var categoryId))
+                .Select(category => new TitleCategory { CategoryId = categoryLanguageDictionary[category], TitleId = titleDictionary[titleCategory.Key] })));
         await context.BulkInsertAsync(categoryTitles, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true }); 
+        
+        // Bulk insert title languages
+        titleLanguages.AddRange(titlesWithLanguages.SelectMany(titleLanguage => 
+            titleLanguage.Value.Where(language => _languageTable.TryGetValue(language, out var languageId))
+                .Select(language => new TitleLanguage { LanguageId = _languageTable[language], TitleId = titleDictionary[titleLanguage.Key] })));
+        await context.BulkInsertAsync(titleLanguages, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true });
+        
         
         titleEntities.Clear();
         regionTitles.Clear();
         regionTitlesTitleId.Clear();
         categoryTitles.Clear();
         titleCategories.Clear();
+        titlesWithLanguages.Clear();
     }
-
+    
     public async Task<ICollection<Region>> GetRegionsAsync()
     {
         return await context.Regions.Include(region => region.Languages).ToListAsync();
     }
 
+    public async Task ImportTitles(IEnumerable<TitleDbTitle> titles)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var regionDictionary = context.Regions.ToDictionary(region => region.Name, region => region.Id);
+        var titleEntities = new List<Title>();
+
+        foreach (var title in titles)
+        {
+            var mappedTitle = MapTitle(title);
+            if (title.Regions is { Count: > 0 })
+            {
+                mappedTitle.Regions = title.Regions
+                    .Where(regionDictionary.ContainsKey)
+                    .Select(region => context.Regions.Local.Single(x => x.Id == regionDictionary[region]))
+                    .ToList();
+            }
+
+            titleEntities.Add(mappedTitle);
+            if (titleEntities.Count >= 1000)
+            {
+                await SaveAndClear(titleEntities, regionDictionary);
+            }
+        }
+
+        if (titleEntities.Count > 0)
+        {
+            await SaveAndClear(titleEntities, regionDictionary);
+        }
+
+        stopwatch.Stop();
+        AnsiConsole.MarkupLine($"[springgreen3_1]Imported all in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
+    }
+
+    private async Task SaveAndClear(List<Title> titleEntities, Dictionary<string, int> regionDictionary)
+    {
+        context.Titles.AddRange(titleEntities);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        regionDictionary = context.Regions.ToDictionary(region => region.Name, region => region.Id);
+        titleEntities.Clear();
+    }
+    
+    
+/*
     public async Task ImportTitles(IEnumerable<TitleDbTitle> titles)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -223,7 +267,6 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             {
                 AnsiConsole.MarkupLineInterpolated($"[blue]Saving...[/]");
 
-                //await context.SaveChangesAsync();
                 context.Titles.AddRange(titleEntities);
                 await context.SaveChangesAsync();
 
@@ -232,9 +275,6 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
                 titleEntities.Clear();
                 batchCount = 0;
             }
-            //context.Titles.Add(mappedTitle);
-
-            //AnsiConsole.MarkupLineInterpolated($"[blue]Importing[/][yellow] {title.Id}[/] - [green]{title.Name}[/]");
         }
 
         if (batchCount > 0)
@@ -246,7 +286,7 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         stopwatch.Stop();
         AnsiConsole.MarkupLine($"[springgreen3_1]Imported all in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
     }
-
+*/
     private static Title MapTitle(TitleDbTitle title)
     {
         var newTitle = new Title
@@ -268,32 +308,7 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             TitleName = title.Name,
             Region = title.Region,
         };
-        /*
-                if (title.Regions != null)
-                {
-                    //var dbRegions = context.Regions.ToDictionary(region => region.Id, region => region.Name);
-                    foreach (var titleRegion in title.Regions)
-                    {
-                        //var region = context.Regions.FirstOrDefault(x => x.Name == titleRegion);
-                        //var regionId = dbRegions.FirstOrDefault(x => x.Value == titleRegion).Key;
 
-                        if (regionId > 0)
-                        {
-                            var region = new Region() { Id = regionId };
-                            context.Regions.Attach(region);
-                            newTitle.Regions.Add(region);
-                        }
-                        else
-                        {
-                            throw  new Exception($"Region {titleRegion} not found");
-                        }
-
-                    }
-                }
-                */
-
-
-        // await AddTitleAsync(newTitle);
     }
 
     public Task ImportTitlesCategories(IEnumerable<TitleDbTitle> titles)

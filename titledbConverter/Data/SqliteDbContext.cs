@@ -16,7 +16,9 @@ public class SqliteDbContext : DbContext
     public DbSet<Version> Versions { get; set; }
     public DbSet<Region> Regions { get; set; }
     public DbSet<Category> Categories { get; set; }
+    public DbSet<Language> Languages { get; set; }
     public DbSet<CategoryLanguage> CategoryLanguages { get; set; }
+    public DbSet<TitleLanguage> TitleLanguages { get; set; }
 
     public SqliteDbContext(DbContextOptions<SqliteDbContext> options, IOptions<AppSettings> configuration) :
         base(options)
@@ -65,6 +67,11 @@ public class SqliteDbContext : DbContext
             .HasMany(e => e.Languages)
             .WithOne(e => e.Category)
             .HasForeignKey(e => e.CategoryId);
+        
+        modelBuilder.Entity<Title>()
+            .HasMany(e => e.Languages)
+            .WithMany(e => e.Titles)
+            .UsingEntity<TitleLanguage>();
 
         var countryLanguagesJson = File.ReadAllText(Path.Join(_configuration.DownloadPath, "languages.json"));
         var countryLanguages = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(countryLanguagesJson);
