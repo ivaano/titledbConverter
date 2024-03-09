@@ -8,6 +8,9 @@ namespace titledbConverter.Models;
 public class Title
 {
     public int Id { get; set; }
+    [Column(TypeName = "VARCHAR")]
+    [StringLength(200)]
+    public string BannerUrl { get; set; }
     public long? NsuId { get; set; }
     [Column(TypeName = "VARCHAR")]
     [StringLength(20)]
@@ -24,4 +27,6 @@ public class Title
     public virtual ICollection<Language>? Languages { get; set; }
     public ICollection<Region>? Regions { get; set; }
     public ICollection<Category>? Categories { get; set; }
+    
+    public ICollection<RatingContent>? RatingContents { get; set; }
 }

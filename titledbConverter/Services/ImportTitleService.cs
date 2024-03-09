@@ -160,7 +160,21 @@ public class ImportTitleService : IImportTitleService
         
     }
 
-    
+    public async Task ImportRatingContents(string file)
+    {
+        var titles = await ReadTitlesJsonFile(file);
+        var uniqueCategories = new HashSet<string>();
+        foreach (var title in titles)
+        {
+            if (title.RatingContent is not { Count: > 0 }) continue;
+            foreach (var ratingContent in title.RatingContent)
+            {
+                if (uniqueCategories.Add(ratingContent)) continue;
+            }
+        }
+    }
+
+
     public async Task ImportTitlesCategoriesAsync(string file)
     {
         var classifier = new CategoryLanguageClassifier();
