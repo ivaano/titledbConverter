@@ -30,6 +30,12 @@ public sealed class Title
     public string? Developer { get; set; }
     
     [Column(TypeName = "VARCHAR")]
+    [StringLength(50)]
+    public string? Publisher { get; set; }
+    
+    public int? ReleaseDate { get; set; }
+    
+    [Column(TypeName = "VARCHAR")]
     [StringLength(200)]
     public string? TitleName { get; init; }
     

@@ -360,8 +360,11 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             Region = title.Region,
             BannerUrl = title.BannerUrl,
             Developer = title.Developer,
+            Publisher = title.Publisher,
+            ReleaseDate = title.ReleaseDate,
             Description = title.Description,
-            OtherApplicationId = title.OtherApplicationId
+            OtherApplicationId = title.OtherApplicationId,
+            
         };
         if (title.IsBase)
         {
@@ -377,7 +380,6 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         {
             newTitle.ContentType = "AddOnContent";
             newTitle.OtherApplicationId = title.Cnmts?.FirstOrDefault(cnmt => cnmt.OtherApplicationId != null)?.OtherApplicationId;
-            //newTitle.OtherApplicationId = title.Cnmts?.FirstOrDefault()?.OtherApplicationId;
         }        
         return newTitle;
     }
