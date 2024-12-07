@@ -54,7 +54,7 @@ public class SqliteDbContext : DbContext
         modelBuilder.Entity<Title>()
             .HasMany(e => e.Regions)
             .WithMany(e => e.Titles)
-            .UsingEntity<RegionTitle>();
+            .UsingEntity<TitleRegion>();
         
         modelBuilder.Entity<Region>()
             .HasMany(e => e.Languages)

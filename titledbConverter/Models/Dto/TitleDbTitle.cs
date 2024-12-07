@@ -6,6 +6,8 @@ public record TitleDbTitle()
 {
     [JsonPropertyName("id")]
     public required string Id { get; set; }
+    [JsonPropertyName("otherApplicationId")]
+    public string? OtherApplicationId { get; set; }
     [JsonPropertyName("ids")]
     public List<string>? Ids { get; set; }
     [JsonPropertyName("bannerUrl")]

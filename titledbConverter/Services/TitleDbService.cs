@@ -433,6 +433,27 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         }
     }
 
+    private async Task EnrichUpdates(IEnumerable<TitleDbTitle> updates)
+    {
+        foreach (var update in updates)
+        {
+            if (!_concurrentCnmts.TryGetValue(update.Id, out var value))
+                continue;
+            foreach (var cnmt in value.Values)
+            {
+   
+                var baseGame = cnmt.OtherApplicationId != null && _titlesDict.TryGetValue(cnmt.OtherApplicationId, out var baseTitle) ? baseTitle.Value : null;
+                if (baseGame is null) continue;
+                _titlesDict[update.Id].Value.Name = baseGame.Name;
+                _titlesDict[update.Id].Value.Developer = baseGame.Developer;
+                _titlesDict[update.Id].Value.Publisher = baseGame.Publisher;
+                _titlesDict[update.Id].Value.Description = baseGame.Description;
+                _titlesDict[update.Id].Value.BannerUrl = baseGame.BannerUrl;
+                _titlesDict[update.Id].Value.OtherApplicationId = baseGame.Id;
+            }
+        }
+    }
+
     public async Task ImportAllRegionsAsync(ConvertToSql.Settings settings)
     {
         var regions = await dbService.GetRegionsAsync();
@@ -462,11 +483,13 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         var baseGames = _titlesDict.Values.Where(x => x.Value.IsBase).Select(x => x.Value).ToList();
         var dlcGames = _titlesDict.Values.Where(x => x.Value.IsDlc).Select(x => x.Value).ToList();
         var updateGames = _titlesDict.Values.Where(x => x.Value.IsUpdate).Select(x => x.Value).ToList();
+        await EnrichUpdates(updateGames);
         await CleanRegions();
         AnsiConsole.MarkupLine($"[bold green]Titles Count Count: {_titlesDict.Values.Count}[/]");
         AnsiConsole.MarkupLine($"[bold green]Base Titles: {baseGames.Count}[/]");
         AnsiConsole.MarkupLine($"[bold green]DLC Titles: {dlcGames.Count}[/]");
         AnsiConsole.MarkupLine($"[bold green]Update Titles: {updateGames.Count}[/]");
+        AnsiConsole.MarkupLine($"Save to: {Path.Join(settings.DownloadPath, "titles-ivan.json")}");
         await SaveJsonTitles(Path.Join(settings.DownloadPath, "titles-ivan.json"));
     }
 
