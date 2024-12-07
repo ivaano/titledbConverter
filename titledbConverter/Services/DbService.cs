@@ -295,60 +295,6 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         titleEntities.Clear();
     }
     
-    
-/*
-    public async Task ImportTitles(IEnumerable<TitleDbTitle> titles)
-    {
-        var stopwatch = Stopwatch.StartNew();
-
-        var regionDictionary = context.Regions.ToDictionary(region => region.Name, region => region.Id);
-
-        var batchCount = 0;
-        var titleEntities = new List<Title>();
-
-        foreach (var title in titles)
-        {
-            batchCount++;
-            AnsiConsole.MarkupLineInterpolated($"[blue]Importing[/][yellow] {title.Id}[/] - [green]{title.Name}[/]");
-
-            var mappedTitle = MapTitle(title);
-            if (title.Regions is { Count: > 0 })
-            {
-                mappedTitle.Regions = new List<Region>();
-                foreach (var titleRegion in title.Regions)
-                {
-                    if (regionDictionary.TryGetValue(titleRegion, out var regionId))
-                    {
-                        mappedTitle.Regions.Add(context.Regions.Local.Single(x => x.Id == regionId));
-                    }
-                }
-            }
-
-            titleEntities.Add(mappedTitle);
-            if (batchCount >= 1000)
-            {
-                AnsiConsole.MarkupLineInterpolated($"[blue]Saving...[/]");
-
-                context.Titles.AddRange(titleEntities);
-                await context.SaveChangesAsync();
-
-                context.ChangeTracker.Clear();
-                regionDictionary = context.Regions.ToDictionary(region => region.Name, region => region.Id);
-                titleEntities.Clear();
-                batchCount = 0;
-            }
-        }
-
-        if (batchCount > 0)
-        {
-            context.Titles.AddRange(titleEntities);
-            await context.SaveChangesAsync();
-        }
-
-        stopwatch.Stop();
-        AnsiConsole.MarkupLine($"[springgreen3_1]Imported all in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
-    }
-*/
     private static Title MapTitle(TitleDbTitle title)
     {
         var newTitle = new Title
@@ -358,11 +304,16 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             ApplicationId = title.Id,
             TitleName = title.Name,
             Region = title.Region,
+            IconUrl = title.IconUrl,
+            Intro = title.Intro,
             BannerUrl = title.BannerUrl,
             Developer = title.Developer,
             Publisher = title.Publisher,
             ReleaseDate = title.ReleaseDate,
             Description = title.Description,
+            Rating = title.Rating,
+            NumberOfPlayers = title.NumberOfPlayers,
+            Size = title.Size,
             OtherApplicationId = title.OtherApplicationId,
             
         };

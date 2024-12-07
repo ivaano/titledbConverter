@@ -18,15 +18,27 @@ public sealed class Title
     public required string ApplicationId { get; init; }
     
     [Column(TypeName = "VARCHAR")]
-    [StringLength(20)]
+    [StringLength(200)]
+    public string? TitleName { get; init; }
+    
+    [Column(TypeName = "VARCHAR")]
+    [StringLength(200)]
+    public string? Intro { get; init; }
+    
+    [Column(TypeName = "VARCHAR")]
+    [StringLength(200)]
+    public string? IconUrl { get; init; }
+    
+    [Column(TypeName = "VARCHAR")]
+    [StringLength(200)]
     public string? BannerUrl { get; init; }
     
     [Column(TypeName = "TEXT")]
-    [StringLength(20)]
+    [StringLength(5000)]
     public string? Description { get; set; }
     
     [Column(TypeName = "VARCHAR")]
-    [StringLength(20)]
+    [StringLength(50)]
     public string? Developer { get; set; }
     
     [Column(TypeName = "VARCHAR")]
@@ -35,9 +47,10 @@ public sealed class Title
     
     public int? ReleaseDate { get; set; }
     
-    [Column(TypeName = "VARCHAR")]
-    [StringLength(200)]
-    public string? TitleName { get; init; }
+    public int? Rating { get; init; }
+    public long? Size { get; init; }
+    
+    public int? NumberOfPlayers { get; init; }
     
     [Column(TypeName = "VARCHAR")]
     [StringLength(2)]
@@ -54,6 +67,8 @@ public sealed class Title
     public ICollection<Version>? Versions { get; init; }
     public ICollection<Language>? Languages { get; set; }
     public ICollection<Region>? Regions { get; set; }
+    
+    public ICollection<ScreenShot>? ScreenShots { get; set; }
     public ICollection<Category>? Categories { get; set; }
     public ICollection<RatingContent>? RatingContents { get; init; }
     

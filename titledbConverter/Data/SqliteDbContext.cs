@@ -12,6 +12,7 @@ public class SqliteDbContext : DbContext
 {
     private readonly AppSettings _configuration;
     public DbSet<Title> Titles { get; set; }
+    public DbSet<ScreenShot> ScreenShots { get; set; }
     public DbSet<Cnmt> Cnmts { get; set; }
     public DbSet<Version> Versions { get; set; }
     public DbSet<Region> Regions { get; set; }
@@ -65,6 +66,11 @@ public class SqliteDbContext : DbContext
             .HasMany(e => e.Categories)
             .WithMany(e => e.Titles)
             .UsingEntity<TitleCategory>();
+        
+        modelBuilder.Entity<ScreenShot>()
+            .HasOne<Title>(s => s.Title)
+            .WithMany(t => t.ScreenShots)
+            .HasForeignKey(s => s.TitleId);
 
         modelBuilder.Entity<Category>()
             .HasMany(e => e.Languages)
