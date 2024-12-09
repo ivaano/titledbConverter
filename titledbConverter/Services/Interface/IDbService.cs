@@ -12,6 +12,7 @@ public interface IDbService
     public Task<Result<Dictionary<string, Category>>> GetCategoriesAsDict();
     public Task<Result<Dictionary<string, CategoryLanguage>>> GetCategoriesLanguagesAsDict();
     public Task<Result<int>> SaveCategories(IEnumerable<CategoryLanguage> categoryLanguages);
+    public Task<Result<int>> SaveRatingContents(IEnumerable<RatingContent> ratingContents);
     public Task<Result<int>> SaveCategoryLanguages(IEnumerable<CategoryLanguage> categoryLanguages);
     public Task<ICollection<Region>> GetRegionsAsync();
     public Task ImportTitles(IEnumerable<TitleDbTitle> titles);

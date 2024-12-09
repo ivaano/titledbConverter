@@ -155,23 +155,20 @@ public class ImportTitleService : IImportTitleService
                     .ToList();
                 await _dbService.SaveCategoryLanguages(categoryLanguages);
             }
-
         }
-        
     }
 
     public async Task ImportRatingContents(string file)
     {
         var titles = await ReadTitlesJsonFile(file);
-        var uniqueCategories = new HashSet<string>();
-        foreach (var title in titles)
-        {
-            if (title.RatingContent is not { Count: > 0 }) continue;
-            foreach (var ratingContent in title.RatingContent)
-            {
-                if (uniqueCategories.Add(ratingContent)) continue;
-            }
-        }
+        var uniqueRatingContents = titles
+            .Where(t => t.RatingContent != null) 
+            .SelectMany(t => t.RatingContent)
+            .Where(content => content != null)
+            .Distinct();
+        var ratingContents = uniqueRatingContents.Select(content => new RatingContent { Name = content });
+
+        await _dbService.SaveRatingContents(ratingContents);
     }
 
 

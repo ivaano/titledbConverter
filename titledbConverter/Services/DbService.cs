@@ -17,6 +17,7 @@ namespace titledbConverter.Services;
 public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDbService, IDisposable
 {
     private Dictionary<string, int> _languageTable = default!;
+    private Dictionary<string, int> _ratingContentTable = default!;
     private bool _dataFetched = false;
     
     public Task<int> AddTitleAsync(Title title)
@@ -36,6 +37,7 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
     {
         if (_dataFetched) return;
         _languageTable = await context.Languages.ToDictionaryAsync(language => language.LanguageCode, language => language.Id);
+        _ratingContentTable = await context.RatingContents.ToDictionaryAsync(rc => rc.Name, rc => rc.Id);
         _dataFetched = true;
     }
    
@@ -55,6 +57,7 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         var titlesWithCnmts = new Dictionary<string, List<TitleDbCnmt>>();
         var titlesVersions = new Dictionary<string, List<Version>>();
         var titlesScreenshots = new Dictionary<string, List<string>>();
+        var titlesWithRatingContent = new Dictionary<string, List<string>>();
         
         foreach (var title in titles)
         {
@@ -63,6 +66,11 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             if (title.Screenshots is { Count: > 0 })
             {
                 titlesScreenshots.Add(title.Id, title.Screenshots);
+            }
+            
+            if (title.RatingContent is { Count: > 0 })
+            {
+                titlesWithRatingContent.Add(title.Id, title.RatingContent);
             }
             
             if (title.Versions is { Count: > 0 })
@@ -99,7 +107,7 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             {
                 await BulkInsertAndUpdate(titleEntities,  titlesWithRegions, regionDictionary, 
                     categoryLanguageDictionary, titlesWithCategories, titlesWithLanguages, titlesWithCnmts, 
-                    titlesVersions, titlesScreenshots);
+                    titlesVersions, titlesScreenshots, titlesWithRatingContent);
             }
         }
 
@@ -107,7 +115,7 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         {
             await BulkInsertAndUpdate(titleEntities, titlesWithRegions, regionDictionary, 
                 categoryLanguageDictionary, titlesWithCategories, titlesWithLanguages, titlesWithCnmts, 
-                titlesVersions, titlesScreenshots);
+                titlesVersions, titlesScreenshots, titlesWithRatingContent);
         }
 
         stopwatch.Stop();
@@ -169,12 +177,30 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         return result > 0 ? Result.Ok(result) : Result.Fail("No categories saved");
     }
     
+    public async Task<Result<int>> SaveRatingContents(IEnumerable<RatingContent> ratingContents)
+    {
+        var currentRatingContents = context.RatingContents.ToList();
+        
+        var newRatingContents = ratingContents
+            .Where(rc => currentRatingContents.All(c => c.Name != rc.Name)) 
+            .OrderBy(rc => rc.Name)
+            .ToList();
+
+        if (newRatingContents.Count == 0) return Result.Ok(0);
+        
+        context.RatingContents.AddRange(newRatingContents);
+        var result = await context.SaveChangesAsync();
+        return result > 0 ? Result.Ok(result) : Result.Fail("No rating contents saved");
+
+    }
+    
     private async Task ClearTables()
     {
         //raw queries 10 sec faster than ef
         await context.Database.ExecuteSqlAsync($"DELETE FROM TitleRegion");
         await context.Database.ExecuteSqlAsync($"DELETE FROM TitleCategory");
         await context.Database.ExecuteSqlAsync($"DELETE FROM TitleLanguages");
+        await context.Database.ExecuteSqlAsync($"DELETE FROM TitleRatingContents");
         await context.Database.ExecuteSqlAsync($"DELETE FROM Cnmts");
         await context.Database.ExecuteSqlAsync($"DELETE FROM Versions");
         await context.Database.ExecuteSqlAsync($"DELETE FROM ScreenShots");
@@ -190,7 +216,8 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         Dictionary<string, List<string>> regionTitlesTitleId, Dictionary<string, int> regionDictionary, 
         Dictionary<string, int> categoryLanguageDictionary,  Dictionary<string, List<string>> titleCategories, 
         Dictionary<string, List<string>> titlesWithLanguages, Dictionary<string, List<TitleDbCnmt>> titlesWithCnmts,
-        Dictionary<string, List<Version>> titlesWithVersions, Dictionary<string, List<string>> titlesWithScreenshots)
+        Dictionary<string, List<Version>> titlesWithVersions, Dictionary<string, List<string>> titlesWithScreenshots,
+        Dictionary<string, List<string>> titlesWithRatingContent)
     {
         
         await FetchData();
@@ -200,6 +227,7 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         var titleCnmts = new List<Cnmt>();
         var titleVersions = new List<Version>();
         var titleScreenshots = new List<ScreenShot>();
+        var titleRatingContents = new List<TitleRatingContent>();
         
         // Bulk insert titles
         await context.BulkInsertAsync(titleEntities, new BulkConfig() { SetOutputIdentity = true, PreserveInsertOrder = true });
@@ -212,6 +240,14 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             .SelectMany(kvp => kvp.Value.Select(version => { version.TitleId = titleDictionary[kvp.Key]; return version; })));        
         await context.BulkInsertAsync(titleVersions, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true });
 
+        
+        // Bulk insert rating contents
+        titleRatingContents.AddRange(titlesWithRatingContent.
+            SelectMany(x => x.Value
+                .Where(y => _ratingContentTable.TryGetValue(y, out var ratingContentId))
+                .Select(z => new TitleRatingContent { RatingContentId = _ratingContentTable[z], TitleId = titleDictionary[x.Key] })));
+        await context.BulkInsertAsync(titleRatingContents, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true });        
+        
         // Bulk insert screenshots
         titleScreenshots.AddRange(titlesWithScreenshots
             .Where(kvp => titleDictionary.TryGetValue(kvp.Key, out var titleId))
@@ -264,6 +300,7 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         titlesWithCnmts.Clear();
         titlesWithVersions.Clear();
         titlesWithScreenshots.Clear();
+        titlesWithRatingContent.Clear();
     }
     
     public async Task<ICollection<Region>> GetRegionsAsync()

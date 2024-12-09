@@ -30,6 +30,7 @@ public static class Program
             c.AddCommand<ConvertToSql>("convert");
             c.AddCommand<ImportTitles>("import");
             c.AddCommand<ImportCategories>("importcategories");
+            c.AddCommand<ImportRatingContents>("importratingcontents");
         });
         return app.Run(args);
     }
