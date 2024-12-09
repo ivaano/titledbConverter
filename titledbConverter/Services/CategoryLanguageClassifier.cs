@@ -6,7 +6,7 @@ using titledbConverter.Services.Interface;
 
 namespace titledbConverter.Services;
 
-public class CategoryLanguageClassifier : ICategoryLanguageClassifier
+public class CategoryLanguageClassifier
 {
 
     private readonly ImmutableHashSet<string> _knownCategories;
@@ -25,12 +25,5 @@ public class CategoryLanguageClassifier : ICategoryLanguageClassifier
         using var csv = new CsvReader(reader, config);
         var records = csv.GetRecords<CategoryLanguages>();
         return records.ToList();
-    }
-    
-    public async Task ClassifyCategoryLanguageAsync(string region, string language, string name)
-    {
-       var map = LoadLanguageMap(region, language);
-       var caco = map?.FirstOrDefault(c => c.Category == name);
-       var pe = 1;
     }
 }

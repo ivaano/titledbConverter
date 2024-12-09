@@ -232,14 +232,12 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         // Bulk insert titles
         await context.BulkInsertAsync(titleEntities, new BulkConfig() { SetOutputIdentity = true, PreserveInsertOrder = true });
         var titleDictionary = titleEntities.ToDictionary(t => t.ApplicationId, t => t.Id);
-
         
         // Bulk insert versions
         titleVersions.AddRange(titlesWithVersions
             .Where(kvp => titleDictionary.TryGetValue(kvp.Key, out var titleId))
             .SelectMany(kvp => kvp.Value.Select(version => { version.TitleId = titleDictionary[kvp.Key]; return version; })));        
         await context.BulkInsertAsync(titleVersions, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true });
-
         
         // Bulk insert rating contents
         titleRatingContents.AddRange(titlesWithRatingContent.

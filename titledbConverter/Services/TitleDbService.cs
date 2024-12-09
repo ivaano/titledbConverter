@@ -421,7 +421,6 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
             if (title.Value.Regions is not null)
             {
                 title.Value.Regions = title.Value.Regions.Distinct().Where(region => region != null).ToList();
-               
                 title.Value.Regions.Sort();
             }
             
@@ -454,7 +453,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         }
     }
 
-    public async Task ImportAllRegionsAsync(ConvertToSql.Settings settings)
+    public async Task MergeAllRegionsAsync(ConvertToSql.Settings settings)
     {
         var regions = await dbService.GetRegionsAsync();
         _regions = new ConcurrentBag<Region>(regions);
