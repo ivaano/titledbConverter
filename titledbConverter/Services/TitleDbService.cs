@@ -1,12 +1,10 @@
 ﻿using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Globalization;
 using System.Text.Json;
 using CsvHelper;
 using CsvHelper.Configuration;
 using Spectre.Console;
 using titledbConverter.Commands;
-using titledbConverter.Models;
 using titledbConverter.Models.Dto;
 using titledbConverter.Models.Enums;
 using titledbConverter.Services.Interface;
@@ -79,10 +77,6 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     private async Task<ConcurrentDictionary<string, List<string>>> LoadRegionLanguagesAsync(string fileLocation, string preferredRegion, string preferredLanguage)
     {
         var stopwatch = Stopwatch.StartNew();
-        /*
-        var countryLanguages = await File.ReadAllTextAsync(fileLocation)
-            .ContinueWith(fileContent => JsonSerializer.Deserialize<Dictionary<string, List<string>>>(fileContent.Result));
-       */
         var countryLanguages = await GetRegionLanguages(fileLocation);
         _regionLanguages = new ConcurrentDictionary<string, List<string>>(countryLanguages);
 
@@ -163,7 +157,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         return title;
     }
 
-    private TitleDbTitle ImportTitleDto(KeyValuePair<string, TitleDbTitle> game)
+    private TitleDbTitle ConvertTitleDto(KeyValuePair<string, TitleDbTitle> game)
     {
        var title = InitTitleDto(game.Value);
        if (string.IsNullOrEmpty(title.Id)) return title;
@@ -252,7 +246,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         }
     }
 
-    private void AddOrUpdateTitle(KeyValuePair<string, TitleDbTitle> game, RegionLanguageMap regionLanguage)
+    private void AddOrUpdateTitleToDict(KeyValuePair<string, TitleDbTitle> game, RegionLanguageMap regionLanguage)
     {
         if (_titlesDict.TryGetValue(game.Value.Id, out var value))
         {
@@ -280,7 +274,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         }
         else
         {
-            var title = ImportTitleDto(game);
+            var title = ConvertTitleDto(game);
             title.Region = regionLanguage.Region;
             title.Language = regionLanguage.Language;
 
@@ -308,53 +302,23 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
     {
         if (!string.IsNullOrEmpty(game.Value.Id) )
         {
-            AddOrUpdateTitle(game, regionLanguage);
+            AddOrUpdateTitleToDict(game, regionLanguage);
         }
     }
 
-    private async Task ImportRegionAsync(RegionLanguageMap regionLanguage, string downloadPath)
+    private async Task ConvertRegionAsync(RegionLanguageMap regionLanguage, string downloadPath)
     {
-
         var regionFile = Path.Join(downloadPath, $"{regionLanguage.Region}.{regionLanguage.Language}.json");
         var regionTitles = await GetTitlesJsonFilesAsync(regionFile);
         AnsiConsole.MarkupLineInterpolated($"[bold green]Processing {regionFile}[/]");
         var options = new ParallelOptions { MaxDegreeOfParallelism = 2 };
-
-        //Parallel.ForEach(regionTitles, options, kvp => ProcessTitle(kvp, regionLanguage));
         Parallel.ForEach(regionTitles, options, kvp => ProcessTitleDto(kvp, regionLanguage));
 
-        //titles.Clear();
         AnsiConsole.MarkupLine($"[lightslateblue]Title Count for {regionFile}: {regionTitles.Count}[/]");
     }
 
-    private async Task TitleComparer(ConvertToSql.Settings settings)
-    {
-        //load nut titles
-        var nutTitles = await File.ReadAllTextAsync(Path.Join(settings.DownloadPath, "titles.json"))
-            .ContinueWith(fileContent => JsonSerializer.Deserialize<Dictionary<string, NutTitle>>(fileContent.Result));
-        var notFound = 0;
-        /*
-        foreach (var nutTitle in nutTitles)
-        {
-            if (!_titlesDict.ContainsKey(nutTitle.Key))
-            {
-                AnsiConsole.MarkupLine($"[bold red]Notfound {nutTitle.Key}[/]");
-                notFound++;
-            }
-        }
-        */
-        foreach (var title in _titlesDict)
-        {
-            if (!nutTitles.ContainsKey(title.Key))
-            {
-                AnsiConsole.MarkupLine($"[bold red]Notfound {title.Key}[/]");
-                notFound++;
-            }
-        }
-        AnsiConsole.MarkupLine($"[bold red]Notfound: {notFound}[/]");
-    }
     
-    private void ImportNcas(Dictionary<string, TitleDbNca> ncas)
+    private void ConvertNcas(Dictionary<string, TitleDbNca> ncas)
     {
         foreach (var nca in ncas)
         {
@@ -386,7 +350,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         }
     }
     
-    private void ImportVersionsTxt(string filePath)
+    private void ConvertVersionsTxt(string filePath)
     {
         using var reader = new StreamReader(filePath);
         var config = CsvConfiguration.FromAttributes<TitleDbVersionsTxt>();
@@ -453,6 +417,24 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         }
     }
 
+    private Task EnrichDlcs(IEnumerable<TitleDbTitle> baseTitles, IEnumerable<TitleDbTitle> dlcTitles)
+    {
+        var titleDbTitles = baseTitles.ToList();
+        var dlcTitleDbTitles = dlcTitles.ToList();
+        var missingOtherApplicationId = dlcTitleDbTitles.Where(x => x.OtherApplicationId == null).ToList();
+        foreach (var dlc in missingOtherApplicationId)
+        {
+            var prefix = dlc.Id[..12];
+            var match = titleDbTitles.FirstOrDefault(x => x.Id.StartsWith(prefix) && x.IsBase);
+            if (match is not null)
+            {
+                _titlesDict[dlc.Id].Value.OtherApplicationId = match.Id;
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
     public async Task MergeAllRegionsAsync(ConvertToSql.Settings settings)
     {
         var regions = await dbService.GetRegionsAsync();
@@ -464,25 +446,23 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
             LoadVersionsJsonFilesAsync(Path.Join(settings.DownloadPath, "versions.json")));
         
         var preferedRegion = _regionLanguagesDefault.FirstOrDefault(r => r.Region == settings.Region && r.Language == settings.Language);
-        ImportRegionAsync(preferedRegion, settings.DownloadPath).Wait();
+        ConvertRegionAsync(preferedRegion, settings.DownloadPath).Wait();
         AnsiConsole.MarkupLine($"[bold green]Lazy Dict Size: {_titlesDict.Values.Count}[/]");
         
         await Task.WhenAll(_regionLanguagesDefault.Where(r => r.Region != settings.Region)
-            //.Where(r => r.Language == settings.Language)
-            .Select(region => ImportRegionAsync(region, settings.DownloadPath)));
-        
-        //var peta = _titlesDict.Values.Select(x => x.Value).ToList();
+            .Select(region => ConvertRegionAsync(region, settings.DownloadPath)));
 
         AnsiConsole.MarkupLine($"[bold green]Lazy Dict Size: {_titlesDict.Values.Count}[/]");
 
         var ncas = await LoadNcasAsync(Path.Join(settings.DownloadPath, "ncas.json"));
-        ImportNcas(ncas);
-        ImportVersionsTxt(Path.Join(settings.DownloadPath, "versions.txt"));
+        ConvertNcas(ncas);
+        ConvertVersionsTxt(Path.Join(settings.DownloadPath, "versions.txt"));
 
         var baseGames = _titlesDict.Values.Where(x => x.Value.IsBase).Select(x => x.Value).ToList();
         var dlcGames = _titlesDict.Values.Where(x => x.Value.IsDlc).Select(x => x.Value).ToList();
         var updateGames = _titlesDict.Values.Where(x => x.Value.IsUpdate).Select(x => x.Value).ToList();
         await EnrichUpdates(updateGames);
+        await EnrichDlcs(baseGames, dlcGames);
         await CleanRegions();
         AnsiConsole.MarkupLine($"[bold green]Titles Count Count: {_titlesDict.Values.Count}[/]");
         AnsiConsole.MarkupLine($"[bold green]Base Titles: {baseGames.Count}[/]");

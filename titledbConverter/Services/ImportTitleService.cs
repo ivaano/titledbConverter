@@ -52,7 +52,7 @@ public class ImportTitleService : IImportTitleService
     {
         var titles = await ReadTitlesJsonFile(file);
         await _dbService.BulkInsertTitlesAsync(titles);
-   }
+    }
 
     private async Task<IEnumerable<CategoryRegionLanguage>> GetCategoriesFromTsv(string tsvFile)
     {

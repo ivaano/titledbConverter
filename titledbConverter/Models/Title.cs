@@ -45,7 +45,7 @@ public sealed class Title
     [StringLength(50)]
     public string? Publisher { get; set; }
     
-    public int? ReleaseDate { get; set; }
+    public DateOnly? ReleaseDate { get; set; }
     
     public int? Rating { get; init; }
     public long? Size { get; init; }
