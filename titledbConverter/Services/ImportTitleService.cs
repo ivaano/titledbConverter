@@ -1,6 +1,10 @@
-﻿using System.Collections.Concurrent;
+﻿using System.Collections;
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
+using CsvHelper;
+using CsvHelper.Configuration;
 using GTranslate;
 using GTranslate.Translators;
 using Microsoft.Extensions.Logging;
@@ -16,14 +20,11 @@ public class ImportTitleService : IImportTitleService
 {
     private readonly IDbService _dbService;
     private readonly ILogger<ImportTitleService> _logger;
-    private ConcurrentBag<Region> _regions;
     
     public ImportTitleService(IDbService dbService, ILogger<ImportTitleService> logger)
     {
         _dbService = dbService;
         _logger = logger;
-        var regions = _dbService.GetRegions();
-        _regions = new ConcurrentBag<Region>(regions);
     }
 
     private async Task<IEnumerable<TitleDbTitle>> ReadTitlesJsonFile(string fileLocation)
@@ -38,89 +39,123 @@ public class ImportTitleService : IImportTitleService
         stopwatch.Stop();
         return titles;
     }
-    
 
+    private async Task<IEnumerable<(string Region, string LanguageCode)>> GetRegionLanguages()
+    {
+        var regions = await _dbService.GetRegionsAsync();
+        return regions.SelectMany(region => region.Languages,
+                (region, language) => (Region: region.Name, LanguageCode: language.LanguageCode))
+            .ToList();
+    }
     
     public async Task ImportTitlesFromFileAsync(string file)
     {
         var titles = await ReadTitlesJsonFile(file);
-        //await _dbService.ImportTitles(titles);
         await _dbService.BulkInsertTitlesAsync(titles);
-   }
-    
-    public async Task ImportTitlesCategoriesAsync(string file)
+    }
+
+    private async Task<IEnumerable<CategoryRegionLanguage>> GetCategoriesFromTsv(string tsvFile)
     {
-        var titles = await ReadTitlesJsonFile(file);
-        var uniqueCategories = new HashSet<string>();
-        var categoryList = new List<KeyValuePair<string, string>>();
-        var cats = new Dictionary<string, List<KeyValuePair<string, string>>>(StringComparer.InvariantCultureIgnoreCase);
-        var toTranslate = new List<KeyValuePair<string, string>>();
-        foreach (var title in titles)
-        {
-            if (title.Category is not { Count: > 0 }) continue;
-            categoryList.AddRange(from category in title.Category where uniqueCategories.Add(category) 
-                                  select new KeyValuePair<string, string>(title.Language, category));
-        }
-        
-        foreach (var category in categoryList)
-        {
-            if (category.Key.Equals("en"))
-            {
-                if (cats.ContainsKey(category.Value)) continue;
-                cats.Add(category.Value, [category]);
-            }
-            else
-            {
-                toTranslate.Add(category);
-            }
-        }
-        var translator = new GoogleTranslator();
+        using var reader = new StreamReader(tsvFile);
+        var config = CsvConfiguration.FromAttributes<CategoryRegionLanguage>();
+        using var csv = new CsvReader(reader, config);
 
-        foreach (var category in toTranslate)
-        {
-            var translation = await translator.TranslateAsync(category.Value, "en");
-            if (cats.TryGetValue(translation.Translation, out var catList))
-            {
-                catList.Add(category);
-            }
-            else
-            {
-                cats.Add(translation.Translation, [category]);
-            }
+        var records = csv.GetRecords<CategoryRegionLanguage>();
+        return records.ToList();
+    }
 
-            
-        }
-        
-        
-        
-        
-/*
-        foreach (var title in titles)
+    private static List<CategoryLanguage> CreateCategoryLanguages(IEnumerable<string> categoryNames)
+    {
+        return categoryNames.Select(category => new CategoryLanguage
         {
-            if (title.Category is { Count: > 0 })
+            Region = "US",
+            Language = "en",
+            Name = category
+        }).ToList();
+    }
+
+    public async Task ImportAllCategories()
+    {
+        var regionLanguages = await GetRegionLanguages();
+        // Read all categories from the dataset
+        var datasetFolderPath = Path.Combine(Directory.GetCurrentDirectory(), "Datasets");
+        
+        var categories = await _dbService.GetCategoriesAsDict();
+        
+        var usCategories = (await GetCategoriesFromTsv(Path.Combine(datasetFolderPath, "categories.US.en.tsv"))).ToList();
+        var usCategoriesDict = usCategories.ToDictionary(category => category.Original, category => category);
+
+        var categoryNames = categories.IsFailed ? 
+            usCategories.Select(c => c.Original) :
+            categories.Value.Keys.Except(usCategoriesDict.Keys);
+
+        var missingCategories = CreateCategoryLanguages(categoryNames);
+
+        if (missingCategories.Count > 0)
+        {
+            var saveResult = await _dbService.SaveCategories(missingCategories);
+            if (saveResult.IsSuccess)
             {
-                var newCategories = new List<KeyValuePair<string, string>>();
-                foreach (var category in title.Category)
+                categories = await _dbService.GetCategoriesAsDict();
+            }
+        } 
+        
+        var categoriesLanguages = await _dbService.GetCategoriesLanguagesAsDict();
+        
+        foreach (var regionLanguage in regionLanguages)
+        {
+            var tsvFile = Path.Combine(datasetFolderPath, $"categories.{regionLanguage.Region}.{regionLanguage.LanguageCode}.tsv");
+            if (!File.Exists(tsvFile)) continue;
+            var regionCategories = (await GetCategoriesFromTsv(Path.Combine(datasetFolderPath, tsvFile))).ToList();
+
+            if (categoriesLanguages.IsSuccess)
+            {
+                var existingCategories = categoriesLanguages.Value.Keys.Intersect(regionCategories.Select(c => $"{regionLanguage.Region}-{regionLanguage.LanguageCode}.{c.Original}"));
+                var existingCategoriesList = existingCategories.ToList();
+                if (existingCategoriesList.Count == 0)
                 {
-                    if (cats.ContainsKey(category)) break;
-                    if (title.Language is not null && title.Language.Equals("en"))
-                    {
-                        var kvp = new KeyValuePair<string, string>(title.Language, category);
-                        newCategories.Add(kvp);
-                        cats.Add(category, newCategories);
-                    }
-                    else
-                    {
-                        var kvp = new KeyValuePair<string, string>(title.Language, "translatedCat");
-                        newCategories.Add(kvp);
-                        cats.Add(category, newCategories);
-                    }
+                    var categoryLanguages = regionCategories.Select(category => new CategoryLanguage
+                        {
+                            Region = regionLanguage.Region,
+                            Language = regionLanguage.LanguageCode,
+                            Name = category.Original,
+                            CategoryId = categories.Value[category.Translated].Id
+                        })
+                        .ToList();
+                    await _dbService.SaveCategoryLanguages(categoryLanguages);
+
+                }
+                else
+                {
+                    //todo handle existing categories
+                    regionCategories = regionCategories.Where(c => !existingCategoriesList.Contains($"{regionLanguage.Region}-{regionLanguage.LanguageCode}.{c.Translated}")).ToList();
                 }
             }
-            
+            else
+            {
+                var categoryLanguages = regionCategories.Select(category => new CategoryLanguage
+                    {
+                        Region = regionLanguage.Region,
+                        Language = regionLanguage.LanguageCode,
+                        Name = category.Original,
+                        CategoryId = categories.Value[category.Translated].Id
+                    })
+                    .ToList();
+                await _dbService.SaveCategoryLanguages(categoryLanguages);
+            }
         }
-*/
-        var pepa = 1;
-        //await _dbService.ImportTitlesCategories(titles);
+    }
+
+    public async Task ImportRatingContents(string file)
+    {
+        var titles = await ReadTitlesJsonFile(file);
+        var uniqueRatingContents = titles
+            .Where(t => t.RatingContent != null) 
+            .SelectMany(t => t.RatingContent)
+            .Where(content => content != null)
+            .Distinct();
+        var ratingContents = uniqueRatingContents.Select(content => new RatingContent { Name = content });
+
+        await _dbService.SaveRatingContents(ratingContents);
     }
 }

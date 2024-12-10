@@ -1,5 +1,7 @@
 ﻿using System.Diagnostics;
 using EFCore.BulkExtensions;
+using FluentResults;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using titledbConverter.Data;
@@ -7,216 +9,349 @@ using titledbConverter.Models;
 using titledbConverter.Models.Dto;
 using titledbConverter.Services.Interface;
 using Region = titledbConverter.Models.Region;
+using Version = titledbConverter.Models.Version;
+
 
 namespace titledbConverter.Services;
 
 public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDbService, IDisposable
 {
+    private Dictionary<string, int> _languageTable = default!;
+    private Dictionary<string, int> _ratingContentTable = default!;
+    private bool _dataFetched = false;
+    
     public Task<int> AddTitleAsync(Title title)
     {
         context.Titles.Add(title);
         return context.SaveChangesAsync();
     }
+
+    private static List<string> CategoryLanguageMapper(TitleDbTitle title)
+    {
+        var categoryLanguages = (from category in title.Category where !string.IsNullOrEmpty(title.Region) && !string.IsNullOrEmpty(title.Language) select $"{title.Region}-{title.Language}.{category}").ToList();
+
+        return categoryLanguages;
+    }
     
-    
+    private async Task FetchData()
+    {
+        if (_dataFetched) return;
+        _languageTable = await context.Languages.ToDictionaryAsync(language => language.LanguageCode, language => language.Id);
+        _ratingContentTable = await context.RatingContents.ToDictionaryAsync(rc => rc.Name, rc => rc.Id);
+        _dataFetched = true;
+    }
+   
     
     public async Task BulkInsertTitlesAsync(IEnumerable<TitleDbTitle> titles)
     {
         var stopwatch = Stopwatch.StartNew();
+        //db data
+        await ClearTables();
         var regionDictionary = context.Regions.ToDictionary(region => region.Name, region => region.Id);
+        var categoryLanguageDictionary = context.CategoryLanguages.ToDictionary(cl => $"{cl.Region}-{cl.Language}.{cl.Name}", cl => cl.CategoryId);
+        
         var titleEntities = new List<Title>();
-        var regionTitles = new List<RegionTitle>();
-        var regionTitlesTitleId = new Dictionary<string, List<string>>();
-
+        var titlesWithRegions = new Dictionary<string, List<string>>();
+        var titlesWithCategories = new Dictionary<string, List<string>>();
+        var titlesWithLanguages = new Dictionary<string, List<string>>();
+        var titlesWithCnmts = new Dictionary<string, List<TitleDbCnmt>>();
+        var titlesVersions = new Dictionary<string, List<Version>>();
+        var titlesScreenshots = new Dictionary<string, List<string>>();
+        var titlesWithRatingContent = new Dictionary<string, List<string>>();
+        
         foreach (var title in titles)
         {
             var mappedTitle = MapTitle(title);
+            
+            if (title.Screenshots is { Count: > 0 })
+            {
+                titlesScreenshots.Add(title.Id, title.Screenshots);
+            }
+            
+            if (title.RatingContent is { Count: > 0 })
+            {
+                titlesWithRatingContent.Add(title.Id, title.RatingContent);
+            }
+            
+            if (title.Versions is { Count: > 0 })
+            {
+                titlesVersions.Add(title.Id, title.Versions);
+            }
+            
             if (title.Regions is { Count: > 0 })
             {
                 mappedTitle.Regions = new List<Region>();
-                regionTitlesTitleId.Add(title.Id, title.Regions);
+                titlesWithRegions.Add(title.Id, title.Regions);
             }
 
             if (title.Category is { Count: > 0 })
             {
                 mappedTitle.Categories = new List<Category>();
+                titlesWithCategories.Add(title.Id, CategoryLanguageMapper(title));
+            }
+            
+            if (title.Languages is { Count: > 0 })
+            {
+                mappedTitle.Languages = new List<Language>();
+                titlesWithLanguages.Add(title.Id, title.Languages);
             }
 
+            if (title.Cnmts is { Count: > 0 })
+            {
+                titlesWithCnmts.Add(title.Id, title.Cnmts);
+            }
 
             titleEntities.Add(mappedTitle);
 
             if (titleEntities.Count >= 1000)
             {
-                await BulkInsertAndUpdate(titleEntities, regionTitles, regionTitlesTitleId, regionDictionary);
+                await BulkTitlesInserts(titleEntities,  titlesWithRegions, regionDictionary, 
+                    categoryLanguageDictionary, titlesWithCategories, titlesWithLanguages, titlesWithCnmts, 
+                    titlesVersions, titlesScreenshots, titlesWithRatingContent);
             }
         }
 
         if (titleEntities.Count > 0)
         {
-            await BulkInsertAndUpdate(titleEntities, regionTitles, regionTitlesTitleId, regionDictionary);
+            await BulkTitlesInserts(titleEntities, titlesWithRegions, regionDictionary, 
+                categoryLanguageDictionary, titlesWithCategories, titlesWithLanguages, titlesWithCnmts, 
+                titlesVersions, titlesScreenshots, titlesWithRatingContent);
         }
 
         stopwatch.Stop();
         AnsiConsole.MarkupLine($"[springgreen3_1]Imported all in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
     }
-
-    private async Task BulkInsertAndUpdate(List<Title> titleEntities, List<RegionTitle> regionTitles,
-        Dictionary<string, List<string>> regionTitlesTitleId, Dictionary<string, int> regionDictionary)
+    
+    public async Task<Result<Dictionary<string, Category>>> GetCategoriesAsDict()
     {
-        await context.BulkInsertAsync(titleEntities, new BulkConfig() { SetOutputIdentity = true, PreserveInsertOrder = true });
+        var categories = await context.Categories.ToListAsync();
+        return categories.Count == 0 ? Result.Fail<Dictionary<string, Category>>("No categories found") : 
+            Result.Ok(categories.ToDictionary(category => category.Name, category => category));
+    }
 
-        //regions
-        var titleDictionary = titleEntities.ToDictionary(t => t.ApplicationId, t => t.Id);
-        foreach (var titleEntity in regionTitlesTitleId.Keys)
+    public async Task<Result<Dictionary<string, CategoryLanguage>>> GetCategoriesLanguagesAsDict()
+    { 
+        var categories = await context.CategoryLanguages.Include(cl => cl.Category).ToListAsync();
+        return categories.Count == 0 ? Result.Fail<Dictionary<string, CategoryLanguage>>("No categories found") : 
+            Result.Ok(categories.ToDictionary(cl => 
+                    $"{cl.Region}-{cl.Language}.{cl.Name}", 
+                cl => cl));
+    }
+
+
+    public async Task<Result<int>> SaveCategories(IEnumerable<CategoryLanguage> categoryLanguages)
+    {
+        var categoryNames = context.Categories.ToDictionary(category => category.Name, category => category);
+        var existingCategoryNames = context.CategoryLanguages.ToList();
+        foreach (var categoryLanguage in categoryLanguages)
         {
-            foreach (var region in regionTitlesTitleId[titleEntity])
+            var exists = existingCategoryNames
+                .Where(x => x.Name == categoryLanguage.Name)
+                .Where(x => x.Region == categoryLanguage.Region)
+                .FirstOrDefault(x => x.Language == categoryLanguage.Language);
+
+            if (exists is not null) continue;
+            
+            if(categoryNames.TryGetValue(categoryLanguage.Name, out var categoryName))
             {
-                if (regionDictionary.TryGetValue(region, out var regionId))
-                {
-                    regionTitles.Add(new RegionTitle() { RegionId = regionId, TitleId = titleDictionary[titleEntity] });
-                }
+                categoryLanguage.Category = categoryName;
+               
+                context.CategoryLanguages.Add(categoryLanguage);
+            }
+            else
+            {
+                var newCategoryName = new Category {Name = categoryLanguage.Name};
+                categoryLanguage.Category = newCategoryName;
+                context.CategoryLanguages.Add(categoryLanguage);
             }
         }
 
-        await context.BulkInsertAsync(regionTitles, new BulkConfig() { SetOutputIdentity = true, PreserveInsertOrder = true });
+        var result = await context.SaveChangesAsync();
+        return result > 0 ? Result.Ok(result) : Result.Fail("No categories saved");
+    }
 
+    public async Task<Result<int>> SaveCategoryLanguages(IEnumerable<CategoryLanguage> categoryLanguages)
+    {
+        context.CategoryLanguages.AddRange(categoryLanguages);
+        var result = await context.SaveChangesAsync();
+        return result > 0 ? Result.Ok(result) : Result.Fail("No categories saved");
+    }
+    
+    public async Task<Result<int>> SaveRatingContents(IEnumerable<RatingContent> ratingContents)
+    {
+        var currentRatingContents = context.RatingContents.ToList();
+        
+        var newRatingContents = ratingContents
+            .Where(rc => currentRatingContents.All(c => c.Name != rc.Name)) 
+            .OrderBy(rc => rc.Name)
+            .ToList();
+
+        if (newRatingContents.Count == 0) return Result.Ok(0);
+        
+        context.RatingContents.AddRange(newRatingContents);
+        var result = await context.SaveChangesAsync();
+        return result > 0 ? Result.Ok(result) : Result.Fail("No rating contents saved");
+
+    }
+    
+    private async Task ClearTables()
+    {
+        //raw queries 10 sec faster than ef
+        await context.Database.ExecuteSqlAsync($"DELETE FROM TitleRegion");
+        await context.Database.ExecuteSqlAsync($"DELETE FROM TitleCategory");
+        await context.Database.ExecuteSqlAsync($"DELETE FROM TitleLanguages");
+        await context.Database.ExecuteSqlAsync($"DELETE FROM TitleRatingContents");
+        await context.Database.ExecuteSqlAsync($"DELETE FROM Cnmts");
+        await context.Database.ExecuteSqlAsync($"DELETE FROM Versions");
+        await context.Database.ExecuteSqlAsync($"DELETE FROM ScreenShots");
+        await context.Database.ExecuteSqlAsync($"DELETE FROM Titles");
+        await context.Database.ExecuteSqlAsync($"DELETE FROM sqlite_sequence WHERE name = 'Cnmts'");
+        await context.Database.ExecuteSqlAsync($"DELETE FROM sqlite_sequence WHERE name = 'Versions'");
+        await context.Database.ExecuteSqlAsync($"DELETE FROM sqlite_sequence WHERE name = 'ScreenShots'");
+        await context.Database.ExecuteSqlAsync($"DELETE FROM sqlite_sequence WHERE name = 'Titles'");
+    }
+
+    
+    private async Task BulkTitlesInserts(List<Title> titleEntities, 
+        Dictionary<string, List<string>> regionTitlesTitleId, Dictionary<string, int> regionDictionary, 
+        Dictionary<string, int> categoryLanguageDictionary,  Dictionary<string, List<string>> titleCategories, 
+        Dictionary<string, List<string>> titlesWithLanguages, Dictionary<string, List<TitleDbCnmt>> titlesWithCnmts,
+        Dictionary<string, List<Version>> titlesWithVersions, Dictionary<string, List<string>> titlesWithScreenshots,
+        Dictionary<string, List<string>> titlesWithRatingContent)
+    {
+        
+        await FetchData();
+        var regionTitles = new List<TitleRegion>();
+        var categoryTitles = new List<TitleCategory>();
+        var titleLanguages = new List<TitleLanguage>();
+        var titleCnmts = new List<Cnmt>();
+        var titleVersions = new List<Version>();
+        var titleScreenshots = new List<ScreenShot>();
+        var titleRatingContents = new List<TitleRatingContent>();
+        
+        // Bulk insert titles
+        await context.BulkInsertAsync(titleEntities, new BulkConfig() { SetOutputIdentity = true, PreserveInsertOrder = true });
+        var titleDictionary = titleEntities.ToDictionary(t => t.ApplicationId, t => t.Id);
+        
+        // Bulk insert versions
+        titleVersions.AddRange(titlesWithVersions
+            .Where(kvp => titleDictionary.TryGetValue(kvp.Key, out _))
+            .SelectMany(kvp => kvp.Value.Select(version => { version.TitleId = titleDictionary[kvp.Key]; return version; })));        
+        await context.BulkInsertAsync(titleVersions, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true });
+        
+        // Bulk insert rating contents
+        titleRatingContents.AddRange(titlesWithRatingContent.
+            SelectMany(x => x.Value
+                .Where(y => _ratingContentTable.TryGetValue(y, out _))
+                .Select(z => new TitleRatingContent { RatingContentId = _ratingContentTable[z], TitleId = titleDictionary[x.Key] })));
+        await context.BulkInsertAsync(titleRatingContents, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true });        
+        
+        // Bulk insert screenshots
+        titleScreenshots.AddRange(titlesWithScreenshots
+            .Where(kvp => titleDictionary.TryGetValue(kvp.Key, out _))
+            .SelectMany(kvp => kvp.Value.Select(s => new ScreenShot { TitleId = titleDictionary[kvp.Key], Url = s })));
+        await context.BulkInsertAsync(titleScreenshots, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true });
+
+        // Bulk insert cnmts
+        foreach (var (key, value) in titlesWithCnmts)
+        {
+            var exist = titleDictionary.TryGetValue(key, out var titleId);
+            if (exist)
+            {
+                titleCnmts.AddRange(value.Select(cnmt => new Cnmt()
+                {
+                    TitleId = titleId,
+                    OtherApplicationId = cnmt.OtherApplicationId,
+                    RequiredApplicationVersion = cnmt.RequiredApplicationVersion,
+                    TitleType = cnmt.TitleType,
+                    Version = cnmt.Version
+                }));
+            }
+        }
+        await context.BulkInsertAsync(titleCnmts, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true });
+
+        // Bulk insert region titles
+        regionTitles.AddRange(regionTitlesTitleId.Keys.SelectMany(titleEntity => 
+            regionTitlesTitleId[titleEntity].Where(region => regionDictionary.TryGetValue(region, out _))
+                .Select(region => new TitleRegion() { RegionId = regionDictionary[region], TitleId = titleDictionary[titleEntity] })));
+        await context.BulkInsertAsync(regionTitles, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true });
+
+        // Bulk insert category titles
+        categoryTitles.AddRange(titleCategories.SelectMany(titleCategory => 
+            titleCategory.Value.Where(category => categoryLanguageDictionary.TryGetValue(category, out _))
+                .Select(category => new TitleCategory { CategoryId = categoryLanguageDictionary[category], TitleId = titleDictionary[titleCategory.Key] })));
+        await context.BulkInsertAsync(categoryTitles, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true }); 
+        
+        // Bulk insert title languages
+        titleLanguages.AddRange(titlesWithLanguages.SelectMany(titleLanguage => 
+            titleLanguage.Value.Where(language => _languageTable.TryGetValue(language, out _))
+                .Select(language => new TitleLanguage { LanguageId = _languageTable[language], TitleId = titleDictionary[titleLanguage.Key] })));
+        await context.BulkInsertAsync(titleLanguages, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true });
+        
         titleEntities.Clear();
         regionTitles.Clear();
         regionTitlesTitleId.Clear();
+        categoryTitles.Clear();
+        titleCategories.Clear();
+        titlesWithLanguages.Clear();
+        titlesWithCnmts.Clear();
+        titlesWithVersions.Clear();
+        titlesWithScreenshots.Clear();
+        titlesWithRatingContent.Clear();
     }
-
-    public async Task ImportTitles(IEnumerable<TitleDbTitle> titles)
+    
+    public async Task<ICollection<Region>> GetRegionsAsync()
     {
-        var stopwatch = Stopwatch.StartNew();
-
-        var regionDictionary = context.Regions.ToDictionary(region => region.Name, region => region.Id);
-
-        var batchCount = 0;
-        var titleEntities = new List<Title>();
-
-        foreach (var title in titles)
-        {
-            batchCount++;
-            AnsiConsole.MarkupLineInterpolated($"[blue]Importing[/][yellow] {title.Id}[/] - [green]{title.Name}[/]");
-
-            var mappedTitle = MapTitle(title);
-            if (title.Regions is { Count: > 0 })
-            {
-                mappedTitle.Regions = new List<Region>();
-                foreach (var titleRegion in title.Regions)
-                {
-                    if (regionDictionary.TryGetValue(titleRegion, out var regionId))
-                    {
-                        mappedTitle.Regions.Add(context.Regions.Local.Single(x => x.Id == regionId));
-                        /*
-                        var region = new Region() { Id = regionId };
-                        //post.Tags.Add(context.Tags.Local.Single(x => x.Id == 1));
-                        // Check if the region is already being tracked
-                        var local = context.Set<Region>()
-                            .Local
-                            .FirstOrDefault(entry => entry.Id.Equals(region.Id));
-                        // If not, attach it
-                        if (local == null)
-                        {
-                            context.Regions.Attach(region);
-                            mappedTitle.Regions.Add(region);
-                        }
-                        else
-                        {
-                            // Use the tracked instance instead
-                            mappedTitle.Regions.Add(local);
-                        }
-                        */
-                    }
-                }
-            }
-
-            titleEntities.Add(mappedTitle);
-            if (batchCount >= 1000)
-            {
-                AnsiConsole.MarkupLineInterpolated($"[blue]Saving...[/]");
-
-                //await context.SaveChangesAsync();
-                context.Titles.AddRange(titleEntities);
-                await context.SaveChangesAsync();
-
-                context.ChangeTracker.Clear();
-                regionDictionary = context.Regions.ToDictionary(region => region.Name, region => region.Id);
-                titleEntities.Clear();
-                batchCount = 0;
-            }
-            //context.Titles.Add(mappedTitle);
-
-            //AnsiConsole.MarkupLineInterpolated($"[blue]Importing[/][yellow] {title.Id}[/] - [green]{title.Name}[/]");
-        }
-
-        if (batchCount > 0)
-        {
-            context.Titles.AddRange(titleEntities);
-            await context.SaveChangesAsync();
-        }
-
-        stopwatch.Stop();
-        AnsiConsole.MarkupLine($"[springgreen3_1]Imported all in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
+        return await context.Regions.Include(region => region.Languages).ToListAsync();
     }
-
+    
     private static Title MapTitle(TitleDbTitle title)
     {
         var newTitle = new Title
         {
+            
             NsuId = title.NsuId,
             ApplicationId = title.Id,
             TitleName = title.Name,
             Region = title.Region,
+            IconUrl = title.IconUrl,
+            Intro = title.Intro,
+            BannerUrl = title.BannerUrl,
+            Developer = title.Developer,
+            Publisher = title.Publisher,
+            
+            Description = title.Description,
+            Rating = title.Rating,
+            NumberOfPlayers = title.NumberOfPlayers,
+            Size = title.Size,
+            OtherApplicationId = title.OtherApplicationId,
+            
         };
-        return newTitle;
-    }
-
-    public async Task ImportTitle(TitleDbTitle title)
-    {
-        var newTitle = new Title
+        
+        if (title.ReleaseDate is not null && title.ReleaseDate.ToString() is { Length: 8 })
         {
-            NsuId = title.NsuId,
-            ApplicationId = title.Id,
-            TitleName = title.Name,
-            Region = title.Region,
-        };
-        /*
-                if (title.Regions != null)
-                {
-                    //var dbRegions = context.Regions.ToDictionary(region => region.Id, region => region.Name);
-                    foreach (var titleRegion in title.Regions)
-                    {
-                        //var region = context.Regions.FirstOrDefault(x => x.Name == titleRegion);
-                        //var regionId = dbRegions.FirstOrDefault(x => x.Value == titleRegion).Key;
-
-                        if (regionId > 0)
-                        {
-                            var region = new Region() { Id = regionId };
-                            context.Regions.Attach(region);
-                            newTitle.Regions.Add(region);
-                        }
-                        else
-                        {
-                            throw  new Exception($"Region {titleRegion} not found");
-                        }
-
-                    }
-                }
-                */
-
-
-        // await AddTitleAsync(newTitle);
-    }
-
-    public Task ImportTitlesCategories(IEnumerable<TitleDbTitle> titles)
-    {
-        throw new NotImplementedException();
-    }
-
-    public List<Region> GetRegions()
-    {
-        return context.Regions.ToList();
+            var year = title.ReleaseDate / 10000;
+            var month = (title.ReleaseDate / 100) % 100;
+            var day = title.ReleaseDate % 100;
+            newTitle.ReleaseDate = new DateOnly((int)year, (int)month, (int)day);    
+        }
+        
+        if (title.IsBase)
+        {
+            newTitle.ContentType = "Application";
+        }
+        
+        if (title.IsUpdate)
+        {
+            newTitle.ContentType = "Update";
+        }
+        
+        if (title.IsDlc)
+        {
+            newTitle.ContentType = "AddOnContent";
+            //newTitle.OtherApplicationId = title.Cnmts?.FirstOrDefault(cnmt => cnmt.OtherApplicationId != null)?.OtherApplicationId;
+        }        
+        return newTitle;
     }
 
     protected virtual void Dispose(bool disposing)

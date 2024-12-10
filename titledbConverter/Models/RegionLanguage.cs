@@ -1,7 +1,7 @@
 ﻿namespace titledbConverter.Models;
 
-public class RegionTitle
+public class RegionLanguage
 {
-    public int TitleId { get; set; }
+    public int LanguageId { get; set; }
     public int RegionId { get; set; }
 }

@@ -30,6 +30,7 @@ public static class Program
             c.AddCommand<ConvertToSql>("convert");
             c.AddCommand<ImportTitles>("import");
             c.AddCommand<ImportCategories>("importcategories");
+            c.AddCommand<ImportRatingContents>("importratingcontents");
         });
         return app.Run(args);
     }
@@ -44,6 +45,7 @@ public static class Program
                 services.AddDbContext<SqliteDbContext>(options =>
                 {
                     options.UseSqlite(hostContext.Configuration.GetConnectionString("SqliteConnection"));
+                   // options.EnableSensitiveDataLogging(true);
                 });
                 services.AddScoped<ITitleDbService, TitleDbService>();
                 services.AddScoped<IImportTitleService, ImportTitleService>();

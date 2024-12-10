@@ -1,7 +1,7 @@
 ﻿namespace titledbConverter.Models;
 
-public class CategoryTitle
+public class TitleRegion
 {
     public int TitleId { get; set; }
-    public int CategoryId { get; set; }
+    public int RegionId { get; set; }
 }
