@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using titledbConverter.Data;
+using titledbConverter.Enums;
 using titledbConverter.Models;
 using titledbConverter.Models.Dto;
 using titledbConverter.Services.Interface;
@@ -76,6 +77,7 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             if (title.Versions is { Count: > 0 })
             {
                 titlesVersions.Add(title.Id, title.Versions);
+                //mappedTitle.LatestVersion = title.Versions.Select(r => r.VersionNumber).Max();
             }
             
             if (title.Regions is { Count: > 0 })
@@ -307,6 +309,7 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
     
     private static Title MapTitle(TitleDbTitle title)
     {
+        var verSuccess = int.TryParse(title.Version, out var latestVersion) ? latestVersion : 0;
         var newTitle = new Title
         {
             
@@ -319,13 +322,13 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             BannerUrl = title.BannerUrl,
             Developer = title.Developer,
             Publisher = title.Publisher,
-            
+            LatestVersion = latestVersion,
             Description = title.Description,
             Rating = title.Rating,
             NumberOfPlayers = title.NumberOfPlayers,
             Size = title.Size,
             OtherApplicationId = title.OtherApplicationId,
-            
+            ContentType = TitleContentType.Unknown
         };
         
         if (title.ReleaseDate is not null && title.ReleaseDate.ToString() is { Length: 8 })
@@ -333,23 +336,30 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             var year = title.ReleaseDate / 10000;
             var month = (title.ReleaseDate / 100) % 100;
             var day = title.ReleaseDate % 100;
-            newTitle.ReleaseDate = new DateOnly((int)year, (int)month, (int)day);    
+            newTitle.ReleaseDate = new DateTime((int)year, (int)month, (int)day);    
         }
         
         if (title.IsBase)
         {
-            newTitle.ContentType = "Application";
+            newTitle.ContentType = TitleContentType.Base;
         }
         
         if (title.IsUpdate)
         {
-            newTitle.ContentType = "Update";
+            newTitle.ContentType = TitleContentType.Update;
         }
         
         if (title.IsDlc)
         {
-            newTitle.ContentType = "AddOnContent";
-            //newTitle.OtherApplicationId = title.Cnmts?.FirstOrDefault(cnmt => cnmt.OtherApplicationId != null)?.OtherApplicationId;
+            newTitle.ContentType = TitleContentType.DLC;
+            
+            /*
+            newTitle.LatestVersion = title.Cnmts?
+                .Where(cnmt => cnmt.TitleType == (int)TitleContentType.DLC)
+                .Select(cnmt => (int?)cnmt.Version)
+                .DefaultIfEmpty(0)
+                .Max() ?? 0;
+            */
         }        
         return newTitle;
     }

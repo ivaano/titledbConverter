@@ -188,15 +188,17 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         //Update versions
         if (_concurrentVersions.TryGetValue(game.Value.Id, out var vers))
         {
+            
             foreach (var titleVersion in vers.Select(version => new Version
                      {
                          VersionNumber = int.Parse(version.Key),
                          VersionDate = version.Value,
-                         //Title = title
                      }))
             {
-                title.Versions.Add(titleVersion);
+                title.Versions?.Add(titleVersion);
             }
+            var latestVersion = vers.Select(v => int.Parse(v.Key)).Max(); 
+            title.Version = latestVersion.ToString();
         }
 
         return title;
@@ -407,6 +409,12 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
    
                 var baseGame = cnmt.OtherApplicationId != null && _titlesDict.TryGetValue(cnmt.OtherApplicationId, out var baseTitle) ? baseTitle.Value : null;
                 if (baseGame is null) continue;
+                if (string.IsNullOrEmpty(update.Version))
+                {
+                    var version = baseGame.Versions?.Select(v => v.VersionNumber).DefaultIfEmpty(0).Max() ?? 0;
+                    _titlesDict[update.Id].Value.Version = version.ToString();
+                }
+                    
                 _titlesDict[update.Id].Value.Name = baseGame.Name;
                 _titlesDict[update.Id].Value.Developer = baseGame.Developer;
                 _titlesDict[update.Id].Value.Publisher = baseGame.Publisher;
@@ -429,6 +437,12 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
             if (match is not null)
             {
                 _titlesDict[dlc.Id].Value.OtherApplicationId = match.Id;
+                var version = dlc.Cnmts?
+                    .Where(cnmt => cnmt.TitleType == 130)
+                    .Select(cnmt => cnmt.Version)
+                    .DefaultIfEmpty(0)
+                    .Max() ?? 0;
+                _titlesDict[dlc.Id].Value.Version = version.ToString();
             }
         }
 
