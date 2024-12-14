@@ -58,6 +58,10 @@ public sealed class Title
     public string? Region { get; init; }
     
     public int? LatestVersion { get; set; }
+    public int? UpdatesCount { get; set; }
+    public int? DlcCount { get; set; }
+    
+    public bool IsDemo { get; set; }
     
     public TitleContentType ContentType { get; set; }
 

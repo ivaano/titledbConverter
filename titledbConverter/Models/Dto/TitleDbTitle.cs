@@ -56,12 +56,21 @@ public record TitleDbTitle()
     public long? Size { get; set; }
     [JsonPropertyName("version")]
     public string? Version { get; set; }
+    
+    [JsonPropertyName("patchCount")]
+    public int? PatchCount { get; set; }
+    
+    [JsonPropertyName("dlcCount")]
+    public int? DlcCount { get; set; }
+    
     [JsonPropertyName("isBase")]
     public bool IsBase { get; set; } = false;
     [JsonPropertyName("isDlc")]
     public bool IsDlc { get; set; } = false;
     [JsonPropertyName("isUpdate")]
     public bool IsUpdate { get; set; } = false;
+    [JsonPropertyName("editions")]
+    public List<TitleDbEdition>? Editions { get; set; }
     [JsonPropertyName("regions")]
     public List<string>? Regions { get; set; }
     [JsonPropertyName("versions")]

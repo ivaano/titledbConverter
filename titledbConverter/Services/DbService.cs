@@ -319,6 +319,7 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             Region = title.Region,
             IconUrl = title.IconUrl,
             Intro = title.Intro,
+            IsDemo = title.IsDemo,
             BannerUrl = title.BannerUrl,
             Developer = title.Developer,
             Publisher = title.Publisher,
@@ -328,7 +329,9 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             NumberOfPlayers = title.NumberOfPlayers,
             Size = title.Size,
             OtherApplicationId = title.OtherApplicationId,
-            ContentType = TitleContentType.Unknown
+            ContentType = TitleContentType.Unknown,
+            UpdatesCount = title.PatchCount,
+            DlcCount = title.DlcCount
         };
         
         if (title.ReleaseDate is not null && title.ReleaseDate.ToString() is { Length: 8 })
@@ -352,14 +355,6 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
         if (title.IsDlc)
         {
             newTitle.ContentType = TitleContentType.DLC;
-            
-            /*
-            newTitle.LatestVersion = title.Cnmts?
-                .Where(cnmt => cnmt.TitleType == (int)TitleContentType.DLC)
-                .Select(cnmt => (int?)cnmt.Version)
-                .DefaultIfEmpty(0)
-                .Max() ?? 0;
-            */
         }        
         return newTitle;
     }

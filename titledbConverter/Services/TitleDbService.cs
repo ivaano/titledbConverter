@@ -210,7 +210,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         {
             foreach (var id in title.Ids)
             {
-                if (_titlesDict.TryGetValue(id, out var value)) continue;
+                if (_titlesDict.TryGetValue(id, out var value)) {continue;}
 
                 var titleValue = new TitleDbTitle
                 {
@@ -224,6 +224,9 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
                    IconUrl = title.IconUrl,
                    Intro = title.Intro,
                    IsDemo = title.IsDemo,
+                   IsBase = title.IsBase,
+                   IsDlc = title.IsDlc,
+                   IsUpdate = title.IsUpdate,
                    Key = title.Key,
                    Languages = title.Languages,
                    Name = title.Name,
@@ -262,7 +265,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
 
             if (title.Region != regionLanguage.Region)
             {
-                if (title.Regions != null)
+                if (title.Regions is not null)
                 {
                     var exists = title.Regions.Find(s => s == regionLanguage.Region);
                     if (exists is not null) return;
@@ -270,8 +273,25 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
                 }
                 else
                 {
-                    title.Regions = new List<string> { regionLanguage.Region };
+                    title.Regions = [regionLanguage.Region];
                 }
+            }
+            else
+            {
+                if (title.NsuId == game.Value.NsuId) return;
+                var newEdition = new TitleDbEdition
+                {
+                    Id = game.Value.Id,
+                    NsuId = game.Value.NsuId,
+                    Name = game.Value.Name,
+                    BannerUrl = game.Value.BannerUrl,
+                    Description = game.Value.Description,
+                    Screenshots = game.Value.Screenshots,
+                    ReleaseDate = game.Value.ReleaseDate,
+                    Size = game.Value.Size
+                };
+                title.Editions ??= [];
+                title.Editions.Add(newEdition);
             }
         }
         else
@@ -398,7 +418,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         }
     }
 
-    private async Task EnrichUpdates(IEnumerable<TitleDbTitle> updates)
+    private Task EnrichUpdates(IEnumerable<TitleDbTitle> updates)
     {
         foreach (var update in updates)
         {
@@ -423,6 +443,8 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
                 _titlesDict[update.Id].Value.OtherApplicationId = baseGame.Id;
             }
         }
+
+        return Task.CompletedTask;
     }
 
     private Task EnrichDlcs(IEnumerable<TitleDbTitle> baseTitles, IEnumerable<TitleDbTitle> dlcTitles)
@@ -443,6 +465,26 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
                     .DefaultIfEmpty(0)
                     .Max() ?? 0;
                 _titlesDict[dlc.Id].Value.Version = version.ToString();
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task CountUpdatesAndDlcs(IEnumerable<TitleDbTitle> baseTitles, IEnumerable<TitleDbTitle> dlcTitles)
+    {
+        var dlcTitleDbTitles = dlcTitles.ToList();
+
+        foreach (var title in baseTitles)
+        {
+            if (title.Versions is not null)
+            {
+                _titlesDict[title.Id].Value.PatchCount = title.Versions.Count;
+            }
+
+            if (title.Cnmts is not null)
+            {
+                _titlesDict[title.Id].Value.DlcCount = dlcTitleDbTitles.Count(x => x.OtherApplicationId == title.Id && x.IsDlc);
             }
         }
 
@@ -477,6 +519,7 @@ public class TitleDbService(IDbService dbService) : ITitleDbService
         var updateGames = _titlesDict.Values.Where(x => x.Value.IsUpdate).Select(x => x.Value).ToList();
         await EnrichUpdates(updateGames);
         await EnrichDlcs(baseGames, dlcGames);
+        await CountUpdatesAndDlcs(baseGames, dlcGames);
         await CleanRegions();
         AnsiConsole.MarkupLine($"[bold green]Titles Count Count: {_titlesDict.Values.Count}[/]");
         AnsiConsole.MarkupLine($"[bold green]Base Titles: {baseGames.Count}[/]");
