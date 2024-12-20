@@ -27,7 +27,7 @@ public static class Program
         {
             c.PropagateExceptions();
             c.AddCommand<DownloadCommand>("download").WithExample("download", "I:\\titledb");
-            c.AddCommand<ConvertToSql>("convert");
+            c.AddCommand<MergeRegions>("merge");
             c.AddCommand<ImportTitles>("import");
             c.AddCommand<ImportCategories>("importcategories");
             c.AddCommand<ImportRatingContents>("importratingcontents");
@@ -47,7 +47,8 @@ public static class Program
                     options.UseSqlite(hostContext.Configuration.GetConnectionString("SqliteConnection"));
                    // options.EnableSensitiveDataLogging(true);
                 });
-                services.AddScoped<ITitleDbService, TitleDbService>();
+               // services.AddScoped<ITitleDbService, TitleDbService>();
+                services.AddScoped<ITitleDbService, TitleDbServiceNotLazy>();
                 services.AddScoped<IImportTitleService, ImportTitleService>();
                 services.AddScoped<IDbService, DbService>();
             })

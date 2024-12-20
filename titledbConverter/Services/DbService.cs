@@ -76,7 +76,12 @@ public class DbService(SqliteDbContext context, ILogger<DbService> logger) : IDb
             
             if (title.Versions is { Count: > 0 })
             {
-                titlesVersions.Add(title.Id, title.Versions);
+                var titleVersions = title.Versions.Select(version => new Version
+                {
+                    VersionNumber = version.VersionNumber,
+                    VersionDate = version.VersionDate
+                }).ToList();
+                titlesVersions.Add(title.Id, titleVersions);
                 //mappedTitle.LatestVersion = title.Versions.Select(r => r.VersionNumber).Max();
             }
             
