@@ -47,8 +47,8 @@ public static class Program
                     options.UseSqlite(hostContext.Configuration.GetConnectionString("SqliteConnection"));
                    // options.EnableSensitiveDataLogging(true);
                 });
-               // services.AddScoped<ITitleDbService, TitleDbService>();
-                services.AddScoped<ITitleDbService, TitleDbServiceNotLazy>();
+                //services.AddScoped<ITitleDbService, LegacyTitleDbService>();
+                services.AddScoped<ITitleDbService, TitleDbService>();
                 services.AddScoped<IImportTitleService, ImportTitleService>();
                 services.AddScoped<IDbService, DbService>();
             })

@@ -3,7 +3,6 @@ using System.Diagnostics;
 using Microsoft.Extensions.Options;
 using Spectre.Console;
 using Spectre.Console.Cli;
-using titledbConverter.Data;
 using titledbConverter.Services.Interface;
 using titledbConverter.Settings;
 
@@ -50,7 +49,7 @@ public sealed class MergeRegions : AsyncCommand<MergeRegions.Settings>
         
         if (settings.SaveFilePath == null)
         {
-            settings.SaveFilePath = Path.Combine(settings.DownloadPath, "titles.json").ToString();
+            settings.SaveFilePath = Path.Combine(settings.DownloadPath, "titles.json");
             AnsiConsole.MarkupLineInterpolated($"[bold yellow]Missing save filename using default filename[/] [greenyellow]{settings.SaveFilePath}[/]");
         }
         var stopwatch = Stopwatch.StartNew();
