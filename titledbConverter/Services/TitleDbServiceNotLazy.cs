@@ -282,7 +282,7 @@ public class TitleDbServiceNotLazy(IDbService dbService) : ITitleDbService
             var cnmts = contentCnmt;
             var ncaIds = cnmts
                 .Where(x => x.ContentEntries is not null)
-                .SelectMany(k => k.ContentEntries)
+                .SelectMany(k => k.ContentEntries ?? Enumerable.Empty<ContentEntry>())
                 .Select(n => n.NcaId).ToList();
 /*
             title.Ncas = ncaIds
@@ -296,7 +296,7 @@ public class TitleDbServiceNotLazy(IDbService dbService) : ITitleDbService
 
             title.Ncas = ncaIds
                 .Select(id => _concurrentNcas.GetValueOrDefault(id))
-                .Where(value => value != null)
+                .OfType<TitleDbNca>()
                 .ToList();  
             
 
@@ -440,6 +440,35 @@ public class TitleDbServiceNotLazy(IDbService dbService) : ITitleDbService
     }
     */
     
+    public static List<string> GetDifferences(SortedDictionary<string, string> dict1, SortedDictionary<string, string> dict2)
+    {
+        var differences = new List<string>();
+
+        // Check for keys in dict1 not in dict2
+        foreach (var key in dict1.Keys)
+        {
+            if (!dict2.ContainsKey(key))
+            {
+                differences.Add($"Key '{key}' is only in the first dictionary with value {dict1[key]}.");
+            }
+            else if (dict1[key] != dict2[key])
+            {
+                differences.Add($"Key '{key}' has different values: {dict1[key]} (dict1) vs {dict2[key]} (dict2).");
+            }
+        }
+
+        // Check for keys in dict2 not in dict1
+        foreach (var key in dict2.Keys)
+        {
+            if (!dict1.ContainsKey(key))
+            {
+                differences.Add($"Key '{key}' is only in the second dictionary with value {dict2[key]}.");
+            }
+        }
+
+        return differences;
+    }
+    
     private void ProcessUpdates(string filePath, RegionLanguageMap regionLanguage)
     {
         using var reader = new StreamReader(filePath);
@@ -464,13 +493,30 @@ public class TitleDbServiceNotLazy(IDbService dbService) : ITitleDbService
             .Where(cnmt => cnmt.OtherApplicationId is not null)
             .GroupBy(cnmt => cnmt.OtherApplicationId)
             .ToDictionary(
-                g => g.First().TitleId, 
-                g => g.Key);
+                g => g.Key, 
+                g => g.First().TitleId);
         
+        
+        var sortedKeys = new SortedDictionary<string, string>(otherApplicationIdMapTitleId);
+        var sortedKeys2 = new SortedDictionary<string, string>();
+        
+        
+        var otherApplicationIdMapTitleId2 = _concurrentCnmts.Values
+            .SelectMany(cnmt => cnmt.Values)
+            .Where(cnmt => cnmt.OtherApplicationId is not null)
+            .GroupBy(cnmt => cnmt.OtherApplicationId);
+
+        foreach (var kvp in otherApplicationIdMapTitleId2)
+        {
+            sortedKeys2.Add(kvp.First().OtherApplicationId, kvp.First().TitleId);
+        }
+        
+        // Get differences
+        var differences = GetDifferences(sortedKeys, sortedKeys2);
         
         foreach (var otherApplication in recList)
         {
-            if (otherApplication.Id == "0100D90020486800")
+            if (otherApplication.Id == "0100FE3014AB0800")
             {
                 var caco = false;
             }
@@ -587,7 +633,7 @@ public class TitleDbServiceNotLazy(IDbService dbService) : ITitleDbService
             .OrderBy(r => r.Region)
             .ThenBy(r => r.PreferredLanguage) 
             .ThenBy(r => r.Language)
-            .Take(2)
+            //.Take(2)
             .ToList();
 
         foreach (var region in sortedRegions)
