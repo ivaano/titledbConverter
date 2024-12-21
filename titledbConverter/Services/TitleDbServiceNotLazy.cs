@@ -478,54 +478,28 @@ public class TitleDbServiceNotLazy(IDbService dbService) : ITitleDbService
         var records = csv.GetRecords<TitleDbVersionsTxt>();
         var recList = records.ToList();
         
-        /*
-        var otherApplicationIdMapTitleId = _concurrentCnmts.Values
-            .SelectMany(cnmt => cnmt.Values)
-            .Where(cnmt => cnmt.OtherApplicationId is not null)
-            .GroupBy(cnmt => cnmt.OtherApplicationId)
-            .ToDictionary(
-                g => g.Key, 
-                g => g.First().TitleId);
-*/
         
         var otherApplicationIdMapTitleId = _concurrentCnmts.Values
             .SelectMany(cnmt => cnmt.Values)
+            .Where(cnmt => cnmt.TitleType == 129)
             .Where(cnmt => cnmt.OtherApplicationId is not null)
-            .GroupBy(cnmt => cnmt.OtherApplicationId)
+            .GroupBy(cnmt => cnmt.TitleId)
             .ToDictionary(
-                g => g.Key, 
-                g => g.First().TitleId);
-        
-        
-        var sortedKeys = new SortedDictionary<string, string>(otherApplicationIdMapTitleId);
-        var sortedKeys2 = new SortedDictionary<string, string>();
-        
-        
-        var otherApplicationIdMapTitleId2 = _concurrentCnmts.Values
-            .SelectMany(cnmt => cnmt.Values)
-            .Where(cnmt => cnmt.OtherApplicationId is not null)
-            .GroupBy(cnmt => cnmt.OtherApplicationId);
-
-        foreach (var kvp in otherApplicationIdMapTitleId2)
-        {
-            sortedKeys2.Add(kvp.First().OtherApplicationId, kvp.First().TitleId);
-        }
-        
-        // Get differences
-        var differences = GetDifferences(sortedKeys, sortedKeys2);
-        
+                g => g.First().TitleId, 
+                g => g.First().OtherApplicationId);
+       
         foreach (var otherApplication in recList)
         {
             if (otherApplication.Id == "0100FE3014AB0800")
             {
                 var caco = false;
             }
-            var titleType = GetTitleType(otherApplication.Id);
 
+            var titleType = GetTitleType(otherApplication.Id);
             if (titleType != TitleType.Update) continue;
             if (!otherApplicationIdMapTitleId.TryGetValue(otherApplication.Id, out var titleId)) continue;
+            
             var baseTitle = GetTitleFromDict(titleId);
-
             var title = new TitleDbTitle
             {
                 Id = otherApplication.Id,
