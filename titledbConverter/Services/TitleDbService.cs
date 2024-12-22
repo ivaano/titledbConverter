@@ -22,8 +22,8 @@ public class TitleDbService : ITitleDbService
     private readonly ConcurrentDictionary<string, TitleDbTitle> _titlesDict = new();
     private bool _isCnmtsLoaded;
     private bool _isVersionsLoaded;
-    private readonly ReaderWriterLockSlim _readLock = new ReaderWriterLockSlim();
-    private readonly ReaderWriterLockSlim _writeLock = new ReaderWriterLockSlim();
+    private readonly ReaderWriterLockSlim _readLock = new();
+    private readonly ReaderWriterLockSlim _writeLock = new();
 
     
     private void AddTitleToDict(string key, TitleDbTitle value)
@@ -134,25 +134,6 @@ public class TitleDbService : ITitleDbService
                 keyValuePair.Value.NcaId = keyValuePair.Key;
             }
             _concurrentNcas = new ConcurrentDictionary<string, TitleDbNca>(ncas);
-
-            /*
-            _concurrentNcas = new ConcurrentDictionary<string, TitleDbNca>(
-                _concurrentNcas
-                    .ToDictionary(
-                        kvp => kvp.Key, 
-                        kvp => { kvp.Value.NcaId = kvp.Key; return kvp.Value; })
-            );
-            */
-            /*
-            _concurrentNcas = new ConcurrentDictionary<string, List<TitleDbNca>>(
-                ncas.Values
-                    .GroupBy(item => item.TitleId)
-                    .ToDictionary(
-                    kvp => kvp.Key.ToUpper(),
-                    kvp => kvp.ToList()
-                    )
-            );
-            */
         }
         stopwatch.Stop();
         AnsiConsole.MarkupLine($"[springgreen3_1]Loaded {fileLocation} in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
@@ -259,58 +240,22 @@ public class TitleDbService : ITitleDbService
                 .ToString();
         }
 
-
-        
         //cnmts
         var contentCnmt = _concurrentCnmts
             .TryGetValue(titleId, out var cnmt) ? cnmt.Values.ToList() : null;
         title.Cnmts ??= [];
         if (contentCnmt is not null)
         {
-            /*
-            var otherApplicationIds = contentCnmt
-                .Where(c => c.TitleType == 128)
-                .Select(cn => cn.OtherApplicationId).ToList();
-            var patchCnmt = otherApplicationIds?
-                .Where(key => !string.IsNullOrEmpty(key))
-                .Select(key => 
-                {
-                    _concurrentCnmts.TryGetValue(key, out var cnmtCollection);
-                    return cnmtCollection?.Values ?? Enumerable.Empty<TitleDbCnmt>();
-                })
-                .SelectMany(item => item)
-                .ToList() ?? [];
-            
-            var cnmts = contentCnmt.Concat(patchCnmt).ToList();
-            */
             var cnmts = contentCnmt;
             var ncaIds = cnmts
                 .Where(x => x.ContentEntries is not null)
                 .SelectMany(k => k.ContentEntries ?? Enumerable.Empty<ContentEntry>())
                 .Select(n => n.NcaId).ToList();
-/*
-            title.Ncas = ncaIds
-                .Join(_concurrentNcas,
-                    id => id,
-                    nca => nca.Key,
-                    (id, nca) => nca.Value)
-                .ToList();
-         */
-
 
             title.Ncas = ncaIds
                 .Select(id => _concurrentNcas.GetValueOrDefault(id))
                 .OfType<TitleDbNca>()
                 .ToList();  
-            
-
-
-            /*
-            title.Ncas = _concurrentNcas
-                .Where(n => ncaIds.Contains(n.Key))
-                .Select(n => n.Value)
-                .ToList();
-            */
             
             title.Cnmts.AddRange(cnmts);
             
@@ -328,7 +273,6 @@ public class TitleDbService : ITitleDbService
         //additional ids
         if (title.Ids is not null && title.Ids.Count > 1)
         {
-            
             title.Ids
                 .Where(id => id != title.Id)
                 .Where(id => !_titlesDict.ContainsKey(id))
@@ -419,35 +363,6 @@ public class TitleDbService : ITitleDbService
         }
     }
     
-    public static List<string> GetDifferences(SortedDictionary<string, string> dict1, SortedDictionary<string, string> dict2)
-    {
-        var differences = new List<string>();
-
-        // Check for keys in dict1 not in dict2
-        foreach (var key in dict1.Keys)
-        {
-            if (!dict2.ContainsKey(key))
-            {
-                differences.Add($"Key '{key}' is only in the first dictionary with value {dict1[key]}.");
-            }
-            else if (dict1[key] != dict2[key])
-            {
-                differences.Add($"Key '{key}' has different values: {dict1[key]} (dict1) vs {dict2[key]} (dict2).");
-            }
-        }
-
-        // Check for keys in dict2 not in dict1
-        foreach (var key in dict2.Keys)
-        {
-            if (!dict1.ContainsKey(key))
-            {
-                differences.Add($"Key '{key}' is only in the second dictionary with value {dict2[key]}.");
-            }
-        }
-
-        return differences;
-    }
-    
     private void ProcessUpdates(string filePath, RegionLanguageMap regionLanguage)
     {
         using var reader = new StreamReader(filePath);
@@ -494,8 +409,10 @@ public class TitleDbService : ITitleDbService
     
     private Task CountUpdatesAndDlcs()
     {
-        var baseTitles = _titlesDict.Values.Where(x => x.IsBase).Select(x => x).ToList();
-        var dlcTitleDbTitles = _titlesDict.Values.Where(x => x.IsDlc).Select(x => x).ToList();
+        var baseTitles = _titlesDict.Values.
+            Where(x => x.IsBase).Select(x => x).ToList();
+        var dlcTitleDbTitles = _titlesDict.Values.
+            Where(x => x.IsDlc).Select(x => x).ToList();
 
         foreach (var title in baseTitles)
         {
@@ -513,8 +430,6 @@ public class TitleDbService : ITitleDbService
         return Task.CompletedTask;
     }
     
-
-
     private async Task MergeRegionsAsync(RegionLanguageMap regionLanguage, string downloadPath)
     {
         var regionFile = Path.Join(downloadPath, $"{regionLanguage.Region}.{regionLanguage.Language}.json");
@@ -600,12 +515,11 @@ public class TitleDbService : ITitleDbService
         */
         
         //Sort Regions A..Z
-        foreach (var kvp in _titlesDict)
-        {
-            kvp.Value.Regions?.Sort((a, b) => 
-                string.Compare(a, b, StringComparison.Ordinal)
-            );
-        }
+        _titlesDict.Values
+            .Where(t => t.Regions is not null)
+            .ToList()
+            .ForEach(t => t.Regions!.Sort((a, b) => 
+                string.Compare(a, b, StringComparison.OrdinalIgnoreCase)));
         
         //updates are found in versions.txt
         ProcessUpdates(Path.Join(settings.DownloadPath, "versions.txt"), preferedRegion);
