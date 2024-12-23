@@ -7,7 +7,8 @@ namespace titledbConverter.Models.Dto;
 public class CategoryLanguages
 {
     [Name("original")]
-    public string Category { get; set; }
+    public required string Category { get; set; }
+    
     [Name("translated")] 
-    public string Translated { get; set; }
+    public required string Translated { get; set; }
 }

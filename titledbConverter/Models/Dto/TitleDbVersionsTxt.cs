@@ -1,5 +1,4 @@
-﻿using CsvHelper.Configuration;
-using CsvHelper.Configuration.Attributes;
+﻿using CsvHelper.Configuration.Attributes;
 
 namespace titledbConverter.Models.Dto;
 
@@ -8,9 +7,11 @@ namespace titledbConverter.Models.Dto;
 public class TitleDbVersionsTxt
 {
     [Name("id")]
-    public string Id { get; set; }
+    public required string Id { get; set; }
+    
     [Name("rightsId")]
-    public string RightsId { get; set; }
+    public required string RightsId { get; set; }
+    
     [Name("version")]
-    public string Version { get; set; }
+    public required string Version { get; set; }
 }

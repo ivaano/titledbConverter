@@ -43,7 +43,7 @@ public class ImportTitleService : IImportTitleService
     private async Task<IEnumerable<(string Region, string LanguageCode)>> GetRegionLanguages()
     {
         var regions = await _dbService.GetRegionsAsync();
-        return regions.SelectMany(region => region.Languages,
+        return regions.SelectMany(region => region.Languages ?? throw new InvalidOperationException("No Regions Found in the DB."),
                 (region, language) => (Region: region.Name, LanguageCode: language.LanguageCode))
             .ToList();
     }
@@ -60,7 +60,12 @@ public class ImportTitleService : IImportTitleService
         var config = CsvConfiguration.FromAttributes<CategoryRegionLanguage>();
         using var csv = new CsvReader(reader, config);
 
-        var records = csv.GetRecords<CategoryRegionLanguage>();
+        //var records = csv.GetRecords<CategoryRegionLanguage>();
+        var records = new List<CategoryRegionLanguage>();
+        await foreach (var record in csv.GetRecordsAsync<CategoryRegionLanguage>())
+        {
+            records.Add(record);
+        }
         return records.ToList();
     }
 
@@ -150,9 +155,9 @@ public class ImportTitleService : IImportTitleService
     {
         var titles = await ReadTitlesJsonFile(file);
         var uniqueRatingContents = titles
-            .Where(t => t.RatingContent != null) 
-            .SelectMany(t => t.RatingContent)
-            .Where(content => content != null)
+            .Where(t => t.RatingContent is not null) 
+            .SelectMany(t => t.RatingContent!)
+            .Where(content => content is not null)
             .Distinct();
         var ratingContents = uniqueRatingContents.Select(content => new RatingContent { Name = content });
 

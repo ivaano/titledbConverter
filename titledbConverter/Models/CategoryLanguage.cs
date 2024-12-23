@@ -8,16 +8,19 @@ namespace titledbConverter.Models;
 public class CategoryLanguage
 {
     public int Id { get; set; }
+    
     [Column(TypeName = "VARCHAR")]
     [StringLength(2)]
-    public string Region { get; set; }
+    public required string Region { get; set; }
+    
     [Column(TypeName = "VARCHAR")]
     [StringLength(2)]
-    public string Language { get; set; }
+    public required string Language { get; set; }
+    
     [Column(TypeName = "VARCHAR")]
     [StringLength(30)]
-    public string Name { get; set; }
+    public required string Name { get; set; }
     public int CategoryId { get; set; }
     
-    public Category Category { get; set; }
+    public Category Category { get; set; } = null!;
 }

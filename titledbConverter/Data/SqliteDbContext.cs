@@ -14,6 +14,7 @@ public class SqliteDbContext : DbContext
     public DbSet<Title> Titles { get; set; }
     public DbSet<ScreenShot> ScreenShots { get; set; }
     public DbSet<Cnmt> Cnmts { get; set; }
+    public DbSet<Edition> Editions { get; set; }
     public DbSet<Version> Versions { get; set; }
     public DbSet<Region> Regions { get; set; }
     public DbSet<Category> Categories { get; set; }
@@ -40,42 +41,42 @@ public class SqliteDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<Title>()
-            .HasMany(e => e.Cnmts)
-            .WithOne(e => e.Title)
-            .HasForeignKey(e => e.TitleId)
-            .HasPrincipalKey(e => e.Id);
-
-        modelBuilder.Entity<Title>()
-            .HasMany(e => e.Versions)
-            .WithOne(e => e.Title)
-            .HasForeignKey(e => e.TitleId)
-            .HasPrincipalKey(e => e.Id);
-
-        modelBuilder.Entity<Title>()
-            .HasMany(e => e.Regions)
-            .WithMany(e => e.Titles)
-            .UsingEntity<TitleRegion>();
+        modelBuilder.Entity<Category>()
+            .HasMany(e => e.Languages)
+            .WithOne(e => e.Category)
+            .HasForeignKey(e => e.CategoryId);
         
         modelBuilder.Entity<Region>()
             .HasMany(e => e.Languages)
             .WithMany(e => e.Regions)
             .UsingEntity<RegionLanguage>();
-
-        modelBuilder.Entity<Title>()
-            .HasMany(e => e.Categories)
-            .WithMany(e => e.Titles)
-            .UsingEntity<TitleCategory>();
         
         modelBuilder.Entity<ScreenShot>()
             .HasOne<Title>(s => s.Title)
             .WithMany(t => t.ScreenShots)
             .HasForeignKey(s => s.TitleId);
-
-        modelBuilder.Entity<Category>()
-            .HasMany(e => e.Languages)
-            .WithOne(e => e.Category)
-            .HasForeignKey(e => e.CategoryId);
+        
+        modelBuilder.Entity<ScreenShot>()
+            .HasOne<Edition>(s => s.Edition)
+            .WithMany(t => t.ScreenShots)
+            .HasForeignKey(s => s.EditionId);        
+        
+        modelBuilder.Entity<Title>()
+            .HasMany(e => e.Categories)
+            .WithMany(e => e.Titles)
+            .UsingEntity<TitleCategory>();
+        
+        modelBuilder.Entity<Title>()
+            .HasMany(e => e.Editions)
+            .WithOne(e => e.Title)
+            .HasForeignKey(e => e.TitleId)
+            .HasPrincipalKey(e => e.Id);
+        
+        modelBuilder.Entity<Title>()
+            .HasMany(e => e.Cnmts)
+            .WithOne(e => e.Title)
+            .HasForeignKey(e => e.TitleId)
+            .HasPrincipalKey(e => e.Id);
         
         modelBuilder.Entity<Title>()
             .HasMany(e => e.Languages)
@@ -83,13 +84,26 @@ public class SqliteDbContext : DbContext
             .UsingEntity<TitleLanguage>();
         
         modelBuilder.Entity<Title>()
+            .HasMany(e => e.Regions)
+            .WithMany(e => e.Titles)
+            .UsingEntity<TitleRegion>();
+        
+        modelBuilder.Entity<Title>()
+            .HasMany(e => e.Versions)
+            .WithOne(e => e.Title)
+            .HasForeignKey(e => e.TitleId)
+            .HasPrincipalKey(e => e.Id);
+        
+        modelBuilder.Entity<Title>()
             .HasMany(e => e.RatingContents)
             .WithMany(e => e.Titles)
             .UsingEntity<TitleRatingContent>();
+        
 
         var countryLanguagesJson = File.ReadAllText(Path.Join(_configuration.DownloadPath, "languages.json"));
         var countryLanguages = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(countryLanguagesJson);
-
+        if (countryLanguages is null) throw new InvalidOperationException("Unable to parse languages.json");
+        
         var regionId = 0;
         var langId = 0;
         var uniqueLanguages = new Dictionary<string, int>();
