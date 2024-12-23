@@ -59,6 +59,9 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
     {
         var jsonString = await _httpClient.GetStringAsync(new Uri(_baseUri, "languages.json"));
         var countryLanguages = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(jsonString);
+        
+        if (countryLanguages is null) throw new InvalidOperationException("Unable to parse languages.json");
+        
         AnsiConsole.MarkupLine($"[u]{countryLanguages.Count}[/] regions found.");
         await File.WriteAllBytesAsync(settings.DownloadPath + "/languages.json", Encoding.UTF8.GetBytes(jsonString));
         return countryLanguages;        
@@ -67,6 +70,8 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
     {
         var regions = await GetRegions(settings);
+        if (regions is null) throw new InvalidOperationException("Unable to parse languages.json");
+        
         var items = new List<(string name, string url)>
         {
             ("cnmts.json", new Uri(_baseUri, "cnmts.json").ToString()),

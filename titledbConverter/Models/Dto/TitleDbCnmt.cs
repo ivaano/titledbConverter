@@ -35,10 +35,10 @@ public class TitleDbCnmt
 public class ContentEntry
 {
     [JsonPropertyName("buildId")]
-    public string BuildId { get; set; }
+    public string? BuildId { get; set; }
     
     [JsonPropertyName("ncaId")]
-    public string NcaId { get; set; }
+    public string? NcaId { get; set; }
     
     [JsonPropertyName("type")]
     public int Type { get; set; }

@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 
 namespace titledbConverter.Models;
@@ -6,7 +8,12 @@ namespace titledbConverter.Models;
 public sealed class ScreenShot
 {
     public int Id { get; init; }
-    public string Url { get; init; }
-    public int TitleId { get; init; }
+    
+    [Column(TypeName = "VARCHAR")]
+    [StringLength(200)]
+    public string? Url { get; init; }
+    public int? TitleId { get; init; }
+    public int? EditionId { get; init; }
     public Title? Title { get; init; }
+    public Edition? Edition { get; init; }
 }

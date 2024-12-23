@@ -5,7 +5,7 @@ namespace titledbConverter.Models.Dto;
 public class TitleDbNca
 {
     [JsonPropertyName("ncaId")]
-    public string NcaId { get; set; }
+    public string? NcaId { get; set; }
     
     [JsonPropertyName("buildId")]
     public string? BuildId { get; set; }
@@ -28,7 +28,7 @@ public class TitleDbNca
     [JsonPropertyName("size")]
     public long Size { get; set; }
     [JsonPropertyName("titleId")]
-    public string TitleId { get; set; }
+    public string? TitleId { get; set; }
 }
 
 

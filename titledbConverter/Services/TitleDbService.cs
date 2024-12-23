@@ -253,9 +253,9 @@ public class TitleDbService : ITitleDbService
                 .Select(n => n.NcaId).ToList();
 
             title.Ncas = ncaIds
-                .Select(id => _concurrentNcas.GetValueOrDefault(id))
+                .Select(id => _concurrentNcas.TryGetValue(id!, out var nca) ? nca : null)
                 .OfType<TitleDbNca>()
-                .ToList();  
+                .ToList();
             
             title.Cnmts.AddRange(cnmts);
             

@@ -10,7 +10,7 @@ public class RatingContent
     public int Id { get; set; }
     [Column(TypeName = "VARCHAR")]
     [StringLength(30)]
-    public string Name { get; set; }
+    public required string Name { get; set; }
    
     public ICollection<Title> Titles { get; } = [];
 }

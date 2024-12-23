@@ -68,6 +68,7 @@ public sealed class Title
     [Column(TypeName = "VARCHAR")]
     [StringLength(20)]
     public string? OtherApplicationId { get; set; }
+    public ICollection<Edition>? Editions { get; init; }
     public ICollection<Cnmt>? Cnmts { get; init; }
     public ICollection<Version>? Versions { get; init; }
     public ICollection<Language>? Languages { get; set; }
