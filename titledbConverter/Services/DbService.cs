@@ -253,7 +253,7 @@ public class DbService(SqliteDbContext context) : IDbService, IDisposable
         var titleLanguages = new List<TitleLanguage>();
         var titleCnmts = new List<Cnmt>();
         var titleVersions = new List<Version>();
-        var titleScreenshots = new List<ScreenShot>();
+        var titleScreenshots = new List<Screenshot>();
         var titleRatingContents = new List<TitleRatingContent>();
         var titleEditions = new List<Edition>();
         
@@ -282,7 +282,7 @@ public class DbService(SqliteDbContext context) : IDbService, IDisposable
         // Bulk insert screenshots
         titleScreenshots.AddRange(titlesWithScreenshots
             .Where(kvp => _titlesApplicationIdMap.TryGetValue(kvp.Key, out _))
-            .SelectMany(kvp => kvp.Value.Select(s => new ScreenShot { TitleId = _titlesApplicationIdMap[kvp.Key], Url = s })));
+            .SelectMany(kvp => kvp.Value.Select(s => new Screenshot { TitleId = _titlesApplicationIdMap[kvp.Key], Url = s })));
         await context.BulkInsertAsync(titleScreenshots, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true });
 
         // Bulk insert Editions
