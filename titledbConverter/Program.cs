@@ -31,6 +31,8 @@ public static class Program
             c.AddCommand<ImportTitles>("import");
             c.AddCommand<ImportCategories>("importcategories");
             c.AddCommand<ImportRatingContents>("importratingcontents");
+            c.AddCommand<ResetDb>("resetdb");
+            c.AddCommand<FreshDb>("freshdb").WithDescription("Create a new titledb by downloading,merging and importing everything.");
         });
         return app.Run(args);
     }
@@ -51,6 +53,9 @@ public static class Program
                 services.AddScoped<ITitleDbService, TitleDbService>();
                 services.AddScoped<IImportTitleService, ImportTitleService>();
                 services.AddScoped<IDbService, DbService>();
+                services.AddScoped<IDownloadService, DownloadService>();
+                services.AddScoped<IDbInitializationService, DbInitializationService>();
+
             })
             .ConfigureLogging(logging =>
             {
