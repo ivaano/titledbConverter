@@ -33,6 +33,7 @@ public static class Program
             c.AddCommand<ImportRatingContents>("importratingcontents");
             c.AddCommand<ResetDb>("resetdb");
             c.AddCommand<FreshDb>("freshdb").WithDescription("Create a new titledb by downloading,merging and importing everything.");
+            c.AddCommand<Compress>("compress").WithDescription("Compress titledb.db and titles.json files.");
         });
         return app.Run(args);
     }
@@ -55,6 +56,7 @@ public static class Program
                 services.AddScoped<IDbService, DbService>();
                 services.AddScoped<IDownloadService, DownloadService>();
                 services.AddScoped<IDbInitializationService, DbInitializationService>();
+                services.AddScoped<ICompressionService, CompressionService>();
 
             })
             .ConfigureLogging(logging =>

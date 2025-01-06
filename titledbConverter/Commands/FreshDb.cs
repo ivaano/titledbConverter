@@ -14,35 +14,66 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
     private readonly IDownloadService _downloadService;
     private readonly ITitleDbService _titleDbService;
     private readonly IImportTitleService _importTitleService;
+    private readonly ICompressionService _compressionService;
 
     public FreshDb(
         IOptions<AppSettings> configuration,
         IDbInitializationService dbInitService,
         IDownloadService downloadService,
         ITitleDbService titleDbService,
-        IImportTitleService importTitleService)
+        IImportTitleService importTitleService,
+        ICompressionService compressionService)
     {
         _dbInitService = dbInitService;
         _configuration = configuration;
         _downloadService = downloadService;
         _titleDbService = titleDbService;
         _importTitleService = importTitleService;
+        _compressionService = compressionService;
+
 
     }
 
     public sealed class Settings : CommandSettings
     {
-        [CommandArgument(0, "[location]")]
+        [CommandArgument(0, "<location>")]
         [Description("Specify folder where to save the files")]
-        public string? DownloadPath { get; set; }
+        public string DownloadPath { get; set; } = null!;
         
         [CommandOption("-d")]
         [Description("Delete current db and create new one")]
         public bool Drop { get; set; }
+        
+        [CommandOption("-c|--compress <COMPRESSOUTPUT>")]
+        [Description("Compress titledb.db and titles.json to this location")]
+        public string? Compress { get; set; } 
+    }
+    
+    public override ValidationResult Validate(CommandContext context, Settings settings)
+    {
+        if (string.IsNullOrWhiteSpace(settings.DownloadPath))
+        {
+            settings.DownloadPath ??= _configuration.Value.DownloadPath;
+            AnsiConsole.MarkupLine($"Using default download location {settings.DownloadPath}");
+        }
+        
+        if (!string.IsNullOrWhiteSpace(settings.Compress))
+        {
+            var directoryInfo = new DirectoryInfo(settings.Compress);
+            if (!directoryInfo.Exists)
+            {
+                return ValidationResult.Error($"Invalid compress folder location {settings.Compress}");
+            }
+        }
+        
+        return ValidationResult.Success();
     }
 
     public override async Task<int> ExecuteAsync(CommandContext context, FreshDb.Settings settings)
     {
+        var titlesJson = Path.Combine(settings.DownloadPath, "titles.json");
+        var dbPath = Path.Combine(settings.DownloadPath, "titledb.db");
+        
         //Download
         var downloadSettings = new DownloadCommand.Settings
         {
@@ -53,15 +84,18 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
         var regions = await _downloadService.GetRegionsAsync(downloadSettings);
         if (regions is null) throw new InvalidOperationException("Unable to parse languages.json");
         var items = _downloadService.BuildDownloadList(regions);
+        
+        var tasks = items.Select(i => _downloadService.Download(i.url, settings.DownloadPath, false));
+        var enumerableTasks = tasks.ToList();
+        await _downloadService.RunWithThrottlingAsync(enumerableTasks, 3);
+        await Task.WhenAll(enumerableTasks);        
+        
         /*
-        var tasks = items.Select(i => _downloadService.Download(i.url, settings.DownloadPath));
-        await _downloadService.RunWithThrottlingAsync(tasks, 2);
-        await Task.WhenAll(tasks);        
-        */
         foreach (var item in items)
         {
             await _downloadService.Download(item.url, settings.DownloadPath, true);
         }
+        */
         
         //Merge
         var mergeSettings = new MergeRegions.Settings
@@ -69,7 +103,7 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
             DownloadPath = settings.DownloadPath,
             Language = _configuration.Value.PreferredLanguage,
             Region = _configuration.Value.PreferredRegion,
-            SaveFilePath = Path.Combine(settings.DownloadPath, "titles.json")
+            SaveFilePath = titlesJson
         };
         await _titleDbService.MergeAllRegionsAsync(mergeSettings);
 
@@ -84,6 +118,11 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
         //Import Titles
         await _importTitleService.ImportTitlesFromFileAsync(mergeSettings.SaveFilePath);
 
+        if (!string.IsNullOrWhiteSpace(settings.Compress))
+        {
+            await _compressionService.CompressFileAsync(titlesJson, Path.Combine(settings.Compress, "titles.json.gz"));
+            await _compressionService.CompressFileAsync(dbPath, Path.Combine(settings.Compress, "titledb.db.gz"));
+        }
         return 0;
     }
 
