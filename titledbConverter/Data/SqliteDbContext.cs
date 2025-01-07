@@ -12,7 +12,7 @@ public class SqliteDbContext : DbContext
 {
     private readonly AppSettings _configuration;
     public DbSet<Title> Titles { get; set; }
-    public DbSet<ScreenShot> ScreenShots { get; set; }
+    public DbSet<Screenshot> Screenshots { get; set; }
     public DbSet<Cnmt> Cnmts { get; set; }
     public DbSet<Edition> Editions { get; set; }
     public DbSet<Version> Versions { get; set; }
@@ -24,7 +24,8 @@ public class SqliteDbContext : DbContext
 
     public DbSet<RatingContent> RatingContents { get; set; }
     public DbSet<TitleRatingContent> TitleRatingContents { get; set; }
-    
+    public DbSet<History?> History { get; set; }
+
     public SqliteDbContext(DbContextOptions<SqliteDbContext> options, IOptions<AppSettings> configuration) :
         base(options)
     {
@@ -51,14 +52,14 @@ public class SqliteDbContext : DbContext
             .WithMany(e => e.Regions)
             .UsingEntity<RegionLanguage>();
         
-        modelBuilder.Entity<ScreenShot>()
+        modelBuilder.Entity<Screenshot>()
             .HasOne<Title>(s => s.Title)
-            .WithMany(t => t.ScreenShots)
+            .WithMany(t => t.Screenshots)
             .HasForeignKey(s => s.TitleId);
         
-        modelBuilder.Entity<ScreenShot>()
+        modelBuilder.Entity<Screenshot>()
             .HasOne<Edition>(s => s.Edition)
-            .WithMany(t => t.ScreenShots)
+            .WithMany(t => t.Screenshots)
             .HasForeignKey(s => s.EditionId);        
         
         modelBuilder.Entity<Title>()

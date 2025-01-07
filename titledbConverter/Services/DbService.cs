@@ -253,7 +253,7 @@ public class DbService(SqliteDbContext context) : IDbService, IDisposable
         var titleLanguages = new List<TitleLanguage>();
         var titleCnmts = new List<Cnmt>();
         var titleVersions = new List<Version>();
-        var titleScreenshots = new List<ScreenShot>();
+        var titleScreenshots = new List<Screenshot>();
         var titleRatingContents = new List<TitleRatingContent>();
         var titleEditions = new List<Edition>();
         
@@ -282,7 +282,7 @@ public class DbService(SqliteDbContext context) : IDbService, IDisposable
         // Bulk insert screenshots
         titleScreenshots.AddRange(titlesWithScreenshots
             .Where(kvp => _titlesApplicationIdMap.TryGetValue(kvp.Key, out _))
-            .SelectMany(kvp => kvp.Value.Select(s => new ScreenShot { TitleId = _titlesApplicationIdMap[kvp.Key], Url = s })));
+            .SelectMany(kvp => kvp.Value.Select(s => new Screenshot { TitleId = _titlesApplicationIdMap[kvp.Key], Url = s })));
         await context.BulkInsertAsync(titleScreenshots, new BulkConfig() { SetOutputIdentity = false, PreserveInsertOrder = true });
 
         // Bulk insert Editions
@@ -360,7 +360,30 @@ public class DbService(SqliteDbContext context) : IDbService, IDisposable
     {
         return await context.Regions.Include(region => region.Languages).ToListAsync();
     }
-    
+
+    public async Task<bool> AddDbHistory()
+    {
+        var history = new History
+        {
+            VersionNumber = Guid.NewGuid().ToString("n"),
+            TimeStamp = DateTime.Now,
+            TitleCount = context.Titles.Count(),
+            BaseCount = context.Titles.Count(t => t.ContentType == TitleContentType.Base),
+            UpdateCount = context.Titles.Count(t => t.ContentType == TitleContentType.Update),
+            DlcCount = context.Titles.Count(t => t.ContentType == TitleContentType.DLC),
+        };
+        
+        context.History.Add(history);
+        await context.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<History?> GetLatestHistoryAsync()
+    {
+        return await context.History.OrderByDescending(t => t.TimeStamp).FirstOrDefaultAsync();
+    }
+
     private static Title MapTitle(TitleDbTitle title)
     {
         var verSuccess = int.TryParse(title.Version, out var latestVersion) ? latestVersion : 0;

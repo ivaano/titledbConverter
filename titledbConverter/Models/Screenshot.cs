@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 namespace titledbConverter.Models;
 
 [PrimaryKey("Id")]
-public sealed class ScreenShot
+public sealed class Screenshot
 {
     public int Id { get; init; }
     

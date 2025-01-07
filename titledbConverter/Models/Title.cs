@@ -74,7 +74,7 @@ public sealed class Title
     public ICollection<Language>? Languages { get; set; }
     public ICollection<Region>? Regions { get; set; }
     
-    public ICollection<ScreenShot>? ScreenShots { get; set; }
+    public ICollection<Screenshot>? Screenshots { get; set; }
     public ICollection<Category>? Categories { get; set; }
     public ICollection<RatingContent>? RatingContents { get; init; }
     

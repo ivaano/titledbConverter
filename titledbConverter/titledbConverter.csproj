@@ -23,6 +23,7 @@
       <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
       <PackageReference Include="Spectre.Console" Version="0.49.1" />
       <PackageReference Include="Spectre.Console.Cli" Version="0.49.1" />
+      <PackageReference Include="System.IO.Compression.ZipFile" Version="4.3.0" />
     </ItemGroup>
 
     <ItemGroup>
@@ -32,6 +33,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Folder Include="Extensions\" />
       <Folder Include="Migrations\" />
     </ItemGroup>
 

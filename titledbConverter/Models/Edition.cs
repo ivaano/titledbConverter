@@ -31,6 +31,6 @@ public class Edition
     
     public long? Size { get; init; }
     public int TitleId { get; set; }
-    public ICollection<ScreenShot>? ScreenShots { get; set; }
+    public ICollection<Screenshot>? Screenshots { get; set; }
     public Title Title { get; set; } = null!;
 }
