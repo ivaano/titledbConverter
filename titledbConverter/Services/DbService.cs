@@ -360,7 +360,30 @@ public class DbService(SqliteDbContext context) : IDbService, IDisposable
     {
         return await context.Regions.Include(region => region.Languages).ToListAsync();
     }
-    
+
+    public async Task<bool> AddDbHistory()
+    {
+        var history = new History
+        {
+            VersionNumber = Guid.NewGuid().ToString("n"),
+            TimeStamp = DateTime.Now,
+            TitleCount = context.Titles.Count(),
+            BaseCount = context.Titles.Count(t => t.ContentType == TitleContentType.Base),
+            UpdateCount = context.Titles.Count(t => t.ContentType == TitleContentType.Update),
+            DlcCount = context.Titles.Count(t => t.ContentType == TitleContentType.DLC),
+        };
+        
+        context.History.Add(history);
+        await context.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<History?> GetLatestHistoryAsync()
+    {
+        return await context.History.OrderByDescending(t => t.TimeStamp).FirstOrDefaultAsync();
+    }
+
     private static Title MapTitle(TitleDbTitle title)
     {
         var verSuccess = int.TryParse(title.Version, out var latestVersion) ? latestVersion : 0;

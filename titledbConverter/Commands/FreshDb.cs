@@ -15,6 +15,7 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
     private readonly ITitleDbService _titleDbService;
     private readonly IImportTitleService _importTitleService;
     private readonly ICompressionService _compressionService;
+    private readonly IDbService _dbService;
 
     public FreshDb(
         IOptions<AppSettings> configuration,
@@ -22,7 +23,8 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
         IDownloadService downloadService,
         ITitleDbService titleDbService,
         IImportTitleService importTitleService,
-        ICompressionService compressionService)
+        ICompressionService compressionService,
+        IDbService dbService)
     {
         _dbInitService = dbInitService;
         _configuration = configuration;
@@ -30,6 +32,7 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
         _titleDbService = titleDbService;
         _importTitleService = importTitleService;
         _compressionService = compressionService;
+        _dbService = dbService;
 
 
     }
@@ -89,14 +92,7 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
         var enumerableTasks = tasks.ToList();
         await _downloadService.RunWithThrottlingAsync(enumerableTasks, 3);
         await Task.WhenAll(enumerableTasks);        
-        
-        /*
-        foreach (var item in items)
-        {
-            await _downloadService.Download(item.url, settings.DownloadPath, true);
-        }
-        */
-        
+       
         //Merge
         var mergeSettings = new MergeRegions.Settings
         {
@@ -117,12 +113,13 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
         
         //Import Titles
         await _importTitleService.ImportTitlesFromFileAsync(mergeSettings.SaveFilePath);
-
+        await _dbService.AddDbHistory();
+        
         if (!string.IsNullOrWhiteSpace(settings.Compress))
         {
             await _compressionService.CompressFileAsync(titlesJson, Path.Combine(settings.Compress, "titles.json.gz"));
-            await _compressionService.CompressFileAsync(dbPath, Path.Combine(settings.Compress, "titledb.db.gz"));
         }
+        
         return 0;
     }
 

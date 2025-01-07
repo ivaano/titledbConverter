@@ -15,6 +15,6 @@ public interface IDbService
     public Task<Result<int>> SaveRatingContents(IEnumerable<RatingContent> ratingContents);
     public Task<Result<int>> SaveCategoryLanguages(IEnumerable<CategoryLanguage> categoryLanguages);
     public Task<ICollection<Region>> GetRegionsAsync();
-
-    
+    public Task<bool> AddDbHistory();
+    public Task<History?> GetLatestHistoryAsync();
 }

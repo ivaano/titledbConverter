@@ -33,6 +33,7 @@ public static class Program
             c.AddCommand<ImportRatingContents>("importratingcontents");
             c.AddCommand<ResetDb>("resetdb");
             c.AddCommand<FreshDb>("freshdb").WithDescription("Create a new titledb by downloading,merging and importing everything.");
+            c.AddCommand<DbVersion>("dbversion").WithDescription("Get the version of the database.");
             c.AddCommand<Compress>("compress").WithDescription("Compress titledb.db and titles.json files.");
         });
         return app.Run(args);
