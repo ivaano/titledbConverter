@@ -57,7 +57,7 @@ public sealed class Title
     [StringLength(2)]
     public string? Region { get; init; }
     
-    public int? LatestVersion { get; set; }
+    public uint LatestVersion { get; set; }
     public int? UpdatesCount { get; set; }
     public int? DlcCount { get; set; }
     

@@ -386,7 +386,7 @@ public class DbService(SqliteDbContext context) : IDbService, IDisposable
 
     private static Title MapTitle(TitleDbTitle title)
     {
-        var verSuccess = int.TryParse(title.Version, out var latestVersion) ? latestVersion : 0;
+        var verSuccess = uint.TryParse(title.Version, out var latestVersion) ? latestVersion : 0;
         var newTitle = new Title
         {
             

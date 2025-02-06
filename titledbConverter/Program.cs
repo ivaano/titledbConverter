@@ -1,10 +1,10 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Text;
+﻿using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Spectre.Console;
 using Spectre.Console.Cli;
 using titledbConverter.Commands;
 using titledbConverter.Data;
@@ -25,7 +25,27 @@ public static class Program
         var app = new CommandApp(new TypeRegistrar(host));
         app.Configure(c =>
         {
-            c.PropagateExceptions();
+            c.SetExceptionHandler((exception, ctx) =>
+            {
+                if (exception is CommandParseException parseException)
+                {
+                    if (parseException.Message.Contains("Unknown command"))
+                    {
+                        AnsiConsole.MarkupLine($"[red]Error: Unknown command '{args.FirstOrDefault()}'.[/]");
+                    }
+                    if (parseException.Message.Contains("Unexpected option"))
+                    {
+                        AnsiConsole.MarkupLine($"[red]Error: Unexpected option '{args.FirstOrDefault()}'.[/]");
+                    }
+                } else if(exception is CommandParseException) {
+                    AnsiConsole.MarkupLine($"[red]Error: Check command parameters.[/]");
+                }
+                else
+                {
+                    AnsiConsole.WriteException(exception, ExceptionFormats.ShortenEverything);
+                }
+                return -1;
+            });
             c.AddCommand<DownloadCommand>("download").WithExample("download", "I:\\titledb");
             c.AddCommand<MergeRegions>("merge");
             c.AddCommand<ImportTitles>("import");
@@ -35,6 +55,8 @@ public static class Program
             c.AddCommand<FreshDb>("freshdb").WithDescription("Create a new titledb by downloading,merging and importing everything.");
             c.AddCommand<DbVersion>("dbversion").WithDescription("Get the version of the database.");
             c.AddCommand<Compress>("compress").WithDescription("Compress titledb.db and titles.json files.");
+            c.AddCommand<VersionCommand>("version")
+                .WithDescription("Displays the application version.");
         });
         return app.Run(args);
     }
