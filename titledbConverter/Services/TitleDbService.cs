@@ -181,7 +181,7 @@ public class TitleDbService : ITitleDbService
 
         return vers.Select(version => new TitleDbVersions
                        {
-                           VersionNumber = int.Parse(version.Key),
+                           VersionNumber = uint.Parse(version.Key),
                            VersionDate = version.Value
                        }).ToList();
     }

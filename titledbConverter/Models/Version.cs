@@ -8,7 +8,7 @@ namespace titledbConverter.Models;
 public class Version
 {
     public int Id { get; set; }
-    public int VersionNumber { get; set; }
+    public uint VersionNumber { get; set; }
     
     [Column(TypeName = "VARCHAR")]
     [StringLength(15)]

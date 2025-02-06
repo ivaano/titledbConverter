@@ -24,7 +24,7 @@ public class SqliteDbContext : DbContext
 
     public DbSet<RatingContent> RatingContents { get; set; }
     public DbSet<TitleRatingContent> TitleRatingContents { get; set; }
-    public DbSet<History?> History { get; set; }
+    public DbSet<History> History { get; set; }
 
     public SqliteDbContext(DbContextOptions<SqliteDbContext> options, IOptions<AppSettings> configuration) :
         base(options)
