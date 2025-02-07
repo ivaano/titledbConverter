@@ -14,9 +14,11 @@ namespace titledbConverter.Services;
 
 public class TitleDbService : ITitleDbService
 {
+    
     private ConcurrentDictionary<string, ConcurrentDictionary<string, TitleDbCnmt>> _concurrentCnmts = null!;
     private ConcurrentDictionary<string, TitleDbNca> _concurrentNcas = null!;
     private ConcurrentDictionary<string, TitleDbVersion> _concurrentVersions = null!;
+    private ConcurrentDictionary<string, TitleDbVersionsTxt> _concurrentVersionsTxt = null!;
     private ConcurrentDictionary<string, List<string>> _regionLanguages = null!;
     private ConcurrentBag<RegionLanguageMap> _regionLanguagesDefault = null!;
     private readonly ConcurrentDictionary<string, TitleDbTitle> _titlesDict = new();
@@ -97,6 +99,23 @@ public class TitleDbService : ITitleDbService
         stopwatch.Stop();
         AnsiConsole.MarkupLine($"[springgreen3_1]Loaded {fileLocation} in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
         return _regionLanguages;
+    }
+
+    private async Task<ConcurrentDictionary<string, TitleDbVersionsTxt>> LoadVersionsTxtFileAsync(string fileLocation)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var config = CsvConfiguration.FromAttributes<TitleDbVersionsTxt>();
+
+        using var reader = new StreamReader(fileLocation);
+        using var csv = new CsvReader(reader, config);
+        _concurrentVersionsTxt = new ConcurrentDictionary<string, TitleDbVersionsTxt>();
+        await foreach (var record in csv.GetRecordsAsync<TitleDbVersionsTxt>())
+        {
+            _concurrentVersionsTxt.TryAdd(record.Id, record);
+        }
+        stopwatch.Stop();
+        AnsiConsole.MarkupLine($"[springgreen3_1]Loaded {fileLocation} in: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
+        return _concurrentVersionsTxt;
     }
     
     private async Task<ConcurrentDictionary<string, TitleDbVersion>> LoadVersionsJsonFilesAsync(string fileLocation)
@@ -262,11 +281,20 @@ public class TitleDbService : ITitleDbService
             //DLC updates
             if (title.IsDlc)
             {
-                title.Version = contentCnmt
-                    .Select(v => v.Version)
-                    .DefaultIfEmpty()
-                    .Max()
-                    .ToString();
+                _concurrentVersionsTxt.TryGetValue(titleId, out var titleDbVersionsTxt);
+                if (titleDbVersionsTxt is not null)
+                {
+                    title.Version = titleDbVersionsTxt.Version;
+                }
+                else
+                {
+                    title.Version = contentCnmt
+                        .Select(v => v.Version)
+                        .DefaultIfEmpty()
+                        .Max()
+                        .ToString();
+                }
+                
             }
         }
 
@@ -362,51 +390,41 @@ public class TitleDbService : ITitleDbService
             }
         }
     }
-    
-    private void ProcessUpdates(string filePath, RegionLanguageMap regionLanguage)
-    {
-        using var reader = new StreamReader(filePath);
-        var config = CsvConfiguration.FromAttributes<TitleDbVersionsTxt>();
-        using var csv = new CsvReader(reader, config);
 
-        var records = csv.GetRecords<TitleDbVersionsTxt>();
-        var recList = records.ToList();
-        
-        
-        var otherApplicationIdMapTitleId = _concurrentCnmts.Values
+    private void ProcessUpdates(RegionLanguageMap regionLanguage)
+    {
+        var cnmts = _concurrentCnmts.Values
             .SelectMany(cnmt => cnmt.Values)
             .Where(cnmt => cnmt.TitleType == 129)
             .Where(cnmt => cnmt.OtherApplicationId is not null)
             .GroupBy(cnmt => cnmt.TitleId)
             .ToDictionary(
-                g => g.First().TitleId!, 
-                g => g.First().OtherApplicationId);
-       
-        foreach (var otherApplication in recList)
+                g => g.First().TitleId!,
+                g => g.First());
+
+        foreach (var cnmt in cnmts)
         {
-            var titleType = GetTitleType(otherApplication.Id);
-            if (titleType != TitleType.Update) continue;
-            if (!otherApplicationIdMapTitleId.TryGetValue(otherApplication.Id, out var titleId)) continue;
-            
-            var baseTitle = GetTitleFromDict(titleId!);
+            if (cnmt.Value.OtherApplicationId is null) continue;
+            if (!_concurrentVersionsTxt.TryGetValue(cnmt.Key, out var titleDbVersionsTxt)) continue;
+            var baseTitle = GetTitleFromDict(cnmt.Value.OtherApplicationId);
             var title = new TitleDbTitle
             {
-                Id = otherApplication.Id,
+                Id = cnmt.Key,
                 Name = baseTitle.Name,
                 Developer = baseTitle.Developer,
                 Publisher = baseTitle.Publisher,
                 Description = baseTitle.Description,
                 BannerUrl = baseTitle.BannerUrl,
                 OtherApplicationId = baseTitle.Id,
-                RightsId = otherApplication.RightsId,
-                Version = otherApplication.Version,
+                RightsId = titleDbVersionsTxt.RightsId,
+                Version = titleDbVersionsTxt.Version,
                 IsUpdate = true,
                 Versions = GetTitleVersions(baseTitle.Id),
             };
-            AddNewTitle(otherApplication.Id, title, regionLanguage);
+            AddNewTitle(cnmt.Key, title, regionLanguage);
         }
-    }
-    
+    } 
+
     private Task CountUpdatesAndDlcs()
     {
         var baseTitles = _titlesDict.Values.
@@ -475,7 +493,8 @@ public class TitleDbService : ITitleDbService
             LoadRegionLanguagesAsync(Path.Join(settings.DownloadPath, "languages.json"), settings.Region!, settings.Language!),
             LoadCnmtsJsonFilesAsync(Path.Join(settings.DownloadPath, "cnmts.json")),
             LoadNcasAsync(Path.Join(settings.DownloadPath, "ncas.json")),
-            LoadVersionsJsonFilesAsync(Path.Join(settings.DownloadPath, "versions.json")));
+            LoadVersionsJsonFilesAsync(Path.Join(settings.DownloadPath, "versions.json")), 
+            LoadVersionsTxtFileAsync(Path.Join(settings.DownloadPath, "versions.txt")));
         
         var preferedRegion = _regionLanguagesDefault
             .FirstOrDefault(
@@ -521,8 +540,7 @@ public class TitleDbService : ITitleDbService
             .ForEach(t => t.Regions!.Sort((a, b) => 
                 string.Compare(a, b, StringComparison.OrdinalIgnoreCase)));
         
-        //updates are found in versions.txt
-        ProcessUpdates(Path.Join(settings.DownloadPath, "versions.txt"), preferedRegion);
+        ProcessUpdates(preferedRegion);
 
         await CountUpdatesAndDlcs();
 
