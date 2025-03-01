@@ -36,4 +36,7 @@ public class NswReleaseTitle
     [Column(TypeName = "VARCHAR")]
     [StringLength(50)]
     public string? Firmware { get; set; }
+    
+    public uint Version { get; set; }
+
 }

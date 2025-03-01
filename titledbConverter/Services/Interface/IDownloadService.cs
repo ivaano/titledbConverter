@@ -9,7 +9,7 @@ public interface IDownloadService
 
     List<(string name, string url)> BuildDownloadList(Dictionary<string, List<string>> regions);
 
-    Task DownloadWithProgressTask(ProgressTask task, string url, string? path);
+    Task DownloadWithProgressTask(ProgressTask task, string url, string name, string? path);
     Task Download( string url, string? path, bool verbose);
 
     Task RunWithThrottlingAsync(IEnumerable<Task> tasks, int maxDegreeOfParallelism);

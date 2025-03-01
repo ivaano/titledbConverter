@@ -59,7 +59,7 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
         var regions = await _downloadService.GetRegionsAsync(settings);
         if (regions is null) throw new InvalidOperationException("Unable to parse languages.json");
         var items = _downloadService.BuildDownloadList(regions);
-  
+
         await AnsiConsole.Progress()
             .Columns(
                 new TaskDescriptionColumn(),
@@ -77,7 +77,7 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
                     try
                     {
                         var progressTask = ctx.AddTask(item.name);
-                        await _downloadService.DownloadWithProgressTask(progressTask, item.url, settings.DownloadPath);
+                        await _downloadService.DownloadWithProgressTask(progressTask, item.url, item.name, settings.DownloadPath);
                     }
                     finally
                     {

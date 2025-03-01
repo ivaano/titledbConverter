@@ -55,8 +55,8 @@ public static class Program
             c.AddCommand<FreshDb>("freshdb").WithDescription("Create a new titledb by downloading,merging and importing everything.");
             c.AddCommand<DbVersion>("dbversion").WithDescription("Get the version of the database.");
             c.AddCommand<Compress>("compress").WithDescription("Compress titledb.db and titles.json files.");
-            c.AddCommand<VersionCommand>("version")
-                .WithDescription("Displays the application version.");
+            c.AddCommand<VersionCommand>("version").WithDescription("Displays the application version.");
+            c.AddCommand<ImportNswDbReleases>("importnswdbreleases").WithDescription("Import NSW DB Releases.");
         });
         return app.Run(args);
     }
@@ -80,6 +80,7 @@ public static class Program
                 services.AddScoped<IDownloadService, DownloadService>();
                 services.AddScoped<IDbInitializationService, DbInitializationService>();
                 services.AddScoped<ICompressionService, CompressionService>();
+                services.AddScoped<INswReleaseService, NswReleaseService>();
 
             })
             .ConfigureLogging(logging =>

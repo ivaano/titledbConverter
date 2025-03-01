@@ -28,6 +28,7 @@ public class DownloadService : IDownloadService
     {
         var items = new List<(string name, string url)>
         {
+            ("nswl.xml", new Uri(_configuration.Value.NswDbReleasesUrl).ToString()),
             ("cnmts.json", new Uri(_baseUri, "cnmts.json").ToString()),
             ("versions.json", new Uri(_baseUri, "versions.json").ToString()),
             ("ncas.json", new Uri(_baseUri, "ncas.json").ToString()),
@@ -58,7 +59,7 @@ public class DownloadService : IDownloadService
         return countryLanguages;   
     }
 
-    public  async Task DownloadWithProgressTask(ProgressTask task, string url, string? path)
+    public  async Task DownloadWithProgressTask(ProgressTask task, string url, string name, string? path)
     {
         ArgumentNullException.ThrowIfNull(path);
         try
@@ -70,9 +71,7 @@ public class DownloadService : IDownloadService
             task.MaxValue(response.Content.Headers.ContentLength ?? 0);
             task.StartTask();
 
-            var filename = Path.Combine(path, url.Substring(url.LastIndexOf('/') + 1));
-            //AnsiConsole.MarkupLine($"Starting download of [u]{filename}[/] ({task.MaxValue} bytes)");
-
+            var filename = Path.Combine(path, name);
             await using var contentStream = await response.Content.ReadAsStreamAsync();
             await using var fileStream = new FileStream(filename, FileMode.Create, FileAccess.Write, FileShare.None,
                 8192, true);
