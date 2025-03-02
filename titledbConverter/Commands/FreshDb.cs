@@ -16,6 +16,8 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
     private readonly IImportTitleService _importTitleService;
     private readonly ICompressionService _compressionService;
     private readonly IDbService _dbService;
+    private readonly INswReleaseService _nswReleaseService;
+
 
     public FreshDb(
         IOptions<AppSettings> configuration,
@@ -24,7 +26,8 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
         ITitleDbService titleDbService,
         IImportTitleService importTitleService,
         ICompressionService compressionService,
-        IDbService dbService)
+        IDbService dbService,
+        INswReleaseService nswReleaseService)
     {
         _dbInitService = dbInitService;
         _configuration = configuration;
@@ -33,8 +36,7 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
         _importTitleService = importTitleService;
         _compressionService = compressionService;
         _dbService = dbService;
-
-
+        _nswReleaseService = nswReleaseService;
     }
 
     public sealed class Settings : CommandSettings
@@ -76,7 +78,7 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
     {
         var titlesJson = Path.Combine(settings.DownloadPath, "titles.json");
         var dbPath = Path.Combine(settings.DownloadPath, "titledb.db");
-        
+        var nswPath = Path.Combine(settings.DownloadPath, "nswdb.xml");
         //Download
         var downloadSettings = new DownloadCommand.Settings
         {
@@ -88,11 +90,11 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
         if (regions is null) throw new InvalidOperationException("Unable to parse languages.json");
         var items = _downloadService.BuildDownloadList(regions);
         
-        var tasks = items.Select(i => _downloadService.Download(i.url, settings.DownloadPath, false));
+        var tasks = items.Select(i => _downloadService.Download(i.url, i.name, settings.DownloadPath, false));
         var enumerableTasks = tasks.ToList();
         await _downloadService.RunWithThrottlingAsync(enumerableTasks, 3);
         await Task.WhenAll(enumerableTasks);        
-       
+        
         //Merge
         var mergeSettings = new MergeRegions.Settings
         {
@@ -113,12 +115,17 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
         
         //Import Titles
         await _importTitleService.ImportTitlesFromFileAsync(mergeSettings.SaveFilePath);
+
         await _dbService.AddDbHistory();
         
         if (!string.IsNullOrWhiteSpace(settings.Compress))
         {
             await _compressionService.CompressFileAsync(titlesJson, Path.Combine(settings.Compress, "titles.json.gz"));
         }
+        
+        //Process nswdb
+        var importResult = await _nswReleaseService.ImportReleasesFromXmlAsync(nswPath);
+        AnsiConsole.MarkupLineInterpolated($"[cyan3]{importResult} titles inserted from Nswdb.xml[/]");
         
         return 0;
     }

@@ -222,11 +222,13 @@ public class DbService(SqliteDbContext context) : IDbService, IDisposable
         await context.Database.ExecuteSqlAsync($"DELETE FROM Versions");
         await context.Database.ExecuteSqlAsync($"DELETE FROM ScreenShots");
         await context.Database.ExecuteSqlAsync($"DELETE FROM Titles");
+        await context.Database.ExecuteSqlAsync($"DELETE FROM NswReleaseTitles");
         await context.Database.ExecuteSqlAsync($"DELETE FROM sqlite_sequence WHERE name = 'Cnmts'");
         await context.Database.ExecuteSqlAsync($"DELETE FROM sqlite_sequence WHERE name = 'Edition'");
         await context.Database.ExecuteSqlAsync($"DELETE FROM sqlite_sequence WHERE name = 'Versions'");
         await context.Database.ExecuteSqlAsync($"DELETE FROM sqlite_sequence WHERE name = 'ScreenShots'");
         await context.Database.ExecuteSqlAsync($"DELETE FROM sqlite_sequence WHERE name = 'Titles'");
+        await context.Database.ExecuteSqlAsync($"DELETE FROM sqlite_sequence WHERE name = 'NswReleaseTitles'");
     }
 
     private static DateTime? ParseIntDate(int? dateToParse)

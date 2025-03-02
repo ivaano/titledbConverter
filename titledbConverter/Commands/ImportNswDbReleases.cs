@@ -41,9 +41,10 @@ public class ImportNswDbReleases : AsyncCommand<ImportNswDbReleases.Settings>
         if (settings.ImportFile is not null)
         {
             var importResult = await _nswReleaseService.ImportReleasesFromXmlAsync(settings.ImportFile);
-        }
-        Console.WriteLine($"Elapsed time: {stopwatch.Elapsed.TotalMilliseconds} ms");
+            AnsiConsole.MarkupLineInterpolated($"[cyan3]{importResult} titles inserted[/]");
 
+        }
+        AnsiConsole.MarkupLineInterpolated($"[darkviolet]Elapsed time: {stopwatch.Elapsed.TotalMilliseconds} ms[/]");
         return 0;
     }
 }
