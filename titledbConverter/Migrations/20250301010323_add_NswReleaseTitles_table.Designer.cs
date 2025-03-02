@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using titledbConverter.Data;
 
@@ -10,12 +11,14 @@ using titledbConverter.Data;
 namespace titledbConverter.Migrations
 {
     [DbContext(typeof(SqliteDbContext))]
-    partial class SqliteDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250301010323_add_NswReleaseTitles_table")]
+    partial class add_NswReleaseTitles_table
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "8.0.13");
+            modelBuilder.HasAnnotation("ProductVersion", "8.0.11");
 
             modelBuilder.Entity("titledbConverter.Models.Category", b =>
                 {
@@ -275,9 +278,6 @@ namespace titledbConverter.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("VARCHAR");
-
-                    b.Property<uint>("Version")
-                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
