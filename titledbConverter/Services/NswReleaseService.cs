@@ -81,9 +81,22 @@ public class NswReleaseService(SqliteDbContext dbContext) : INswReleaseService
                 titleId);
             var (cleanTitle, revision) = TitleParser.ExtractTitleAndRevision(
                 titleName);
+            var elementId = 0;
+            if (!string.IsNullOrEmpty(GetElementValue(releaseElement, "id")))
+            {
+                elementId = int.Parse(GetElementValue(releaseElement, "id"));
+            }
+            
+            if (!string.IsNullOrEmpty(GetElementValue(releaseElement, "version")))
+            {
+                var xmlVersion = GetElementValue(releaseElement, "version");
+                var numericVersion = Regex.Replace(xmlVersion, @"[^\d]", "");
+                version = uint.Parse(numericVersion);
+            }
+
             var release = new NswReleaseTitle
             {
-                Id = int.Parse(GetElementValue(releaseElement, "id")),
+                Id = elementId,
                 ApplicationId = applicationId,
                 TitleName = cleanTitle,
                 Revision = revision,
