@@ -19,15 +19,18 @@ public class NswReleaseService(SqliteDbContext dbContext) : INswReleaseService
     /// </summary>
     /// <param name="xmlFilePath">Path to the XML file containing release information</param>
     /// <returns>Number of records successfully imported</returns>
-    public async Task<int> ImportReleasesFromXmlAsync(string xmlFilePath)
+    public async Task<int> ImportReleasesFromXmlAsync(string xmlFilePath, bool overwrite = false)
     {
         try
         {
             var doc = XDocument.Load(xmlFilePath);
             var releases = ParseReleases(doc);
-            
-            await dbContext.Database.ExecuteSqlAsync($"DELETE FROM NswReleaseTitles");
-            await dbContext.Database.ExecuteSqlAsync($"DELETE FROM sqlite_sequence WHERE name = 'NswReleaseTitles'");
+            if (overwrite)
+            {
+                await dbContext.Database.ExecuteSqlAsync($"DELETE FROM NswReleaseTitles");
+                await dbContext.Database.ExecuteSqlAsync($"DELETE FROM sqlite_sequence WHERE name = 'NswReleaseTitles'");
+            }
+
             await dbContext.BulkInsertAsync(releases);
 
             return releases.Count;
@@ -37,6 +40,25 @@ public class NswReleaseService(SqliteDbContext dbContext) : INswReleaseService
             Console.WriteLine($"Error importing releases: {ex.Message}");
             throw;
         }
+    }
+
+    public async Task<int> ImportReleasesFromDirectoryAsync(string directoryPath)
+    {
+        var xmlFiles = Directory.GetFiles(directoryPath, "*.xml");
+        var xmlFileRecordCount = 0;
+        foreach (var filePath in xmlFiles)
+        {
+            try
+            {
+                xmlFileRecordCount += await ImportReleasesFromXmlAsync(filePath);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error importing releases from {filePath}: {ex.Message}");
+            }
+        }
+
+        return xmlFileRecordCount;
     }
 
     /// <summary>
@@ -83,7 +105,7 @@ public class NswReleaseService(SqliteDbContext dbContext) : INswReleaseService
                 titleName);
             var release = new NswReleaseTitle
             {
-                Id = int.Parse(GetElementValue(releaseElement, "id")),
+                //Id = int.Parse(GetElementValue(releaseElement, "id")),
                 ApplicationId = applicationId,
                 TitleName = cleanTitle,
                 Revision = revision,
