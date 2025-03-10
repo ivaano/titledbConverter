@@ -208,10 +208,13 @@ public class TitleDbService : ITitleDbService
     private void AddNewTitle(string titleId, TitleDbTitle title, RegionLanguageMap regionLanguage)
     {
         //region
-        title.Region = regionLanguage.Region;
-        title.Regions ??= [];
-        title.Regions.Add(regionLanguage.Region);
-        title.Language = regionLanguage.Language;
+        if (title.Region is null)
+        {
+            title.Region = regionLanguage.Region;
+            title.Regions ??= [];
+            title.Regions.Add(regionLanguage.Region);
+            title.Language = regionLanguage.Language;
+        }
         
         //sort and remove dupes from languages
         title.Languages = title.Languages?.Distinct().OrderBy(language => language).ToList();
@@ -234,7 +237,7 @@ public class TitleDbService : ITitleDbService
                     break;
             }            
         }
-        
+       
         //add missing OtherApplicationId for DLC
         if (title is { IsDlc: true, OtherApplicationId: null }) 
         {
@@ -323,9 +326,20 @@ public class TitleDbService : ITitleDbService
         {
             if (string.IsNullOrEmpty(title.Region))
             {
-                title.Region = regionLanguage.Region;
-                title.Regions ??= [];
-                title.Regions.Add(regionLanguage.Region);
+                if (title is { IsUpdate: true, OtherApplicationId: not null })
+                {
+                        var baseTitle = GetTitleFromDict(title.OtherApplicationId);
+                        title.Region = baseTitle.Region;
+                        title.Regions ??= [];
+                        if (title.Region is not null) title.Regions.Add(title.Region);
+                }
+                else
+                {
+                    title.Region = regionLanguage.Region;
+                    title.Regions ??= [];
+                    title.Regions.Add(regionLanguage.Region);
+                }
+
             }
             else if (title.Region != regionLanguage.Region)
             {
@@ -418,6 +432,8 @@ public class TitleDbService : ITitleDbService
                 OtherApplicationId = baseTitle.Id,
                 RightsId = titleDbVersionsTxt.RightsId,
                 Version = titleDbVersionsTxt.Version,
+                Region = baseTitle.Region,
+                Language = baseTitle.Language,
                 IsUpdate = true,
                 Versions = GetTitleVersions(baseTitle.Id),
             };

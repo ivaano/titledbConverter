@@ -7,6 +7,8 @@ public interface INswReleaseService
     /// </summary>
     /// <param name="xmlFilePath">Path to the XML file containing release information</param>
     /// <returns>Number of records successfully imported</returns>
-    public Task<int> ImportReleasesFromXmlAsync(string xmlFilePath);
+    public Task<int> ImportReleasesFromXmlAsync(string xmlFilePath, bool overwrite = false);
+    
+    public Task<int> ImportReleasesFromDirectoryAsync(string directoryPath);
 
 }
