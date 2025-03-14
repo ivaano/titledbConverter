@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "titledbConverter", "titledbConverter\titledbConverter.csproj", "{82DADA8A-CAD4-4084-918A-30FA4FE68476}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "titledbConverter", "src\titledbConverter\titledbConverter.csproj", "{82DADA8A-CAD4-4084-918A-30FA4FE68476}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
