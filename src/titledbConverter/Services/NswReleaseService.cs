@@ -2,19 +2,18 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using titledbConverter.Data;
 using titledbConverter.Extensions;
 using titledbConverter.Models;
 using titledbConverter.Services.Interface;
+using titledbConverter.Settings;
 using titledbConverter.Utils;
 
 namespace titledbConverter.Services;
 
-public class NswReleaseService(SqliteDbContext dbContext) : INswReleaseService
+public class NswReleaseService(SqliteDbContext dbContext, IOptions<AppSettings> configuration) : INswReleaseService
 {
- 
-    private List<string> RegionsToExclude { get; set; }
-    
     /// <summary>
     /// Parse the XML file and import all releases into the database
     /// </summary>
@@ -22,12 +21,6 @@ public class NswReleaseService(SqliteDbContext dbContext) : INswReleaseService
     /// <returns>Number of records successfully imported</returns>
     public async Task<int> ImportReleasesFromXmlAsync(string xmlFilePath, bool overwrite = false)
     {
-        RegionsToExclude =
-        [
-            "USA",
-            "WLD",
-            "EUR"
-        ];
         try
         {
             var doc = XDocument.Load(xmlFilePath);
@@ -102,7 +95,7 @@ public class NswReleaseService(SqliteDbContext dbContext) : INswReleaseService
                         Version = additionalTitle.Version
                     };
 
-                    if (!RegionsToExclude.Contains(releaseSameTitle.Region))
+                    if (!configuration.Value.NswDbRegionsToExclude.Contains(releaseSameTitle.Region))
                     {
                         releases.Add(releaseSameTitle);
                     }
@@ -128,7 +121,7 @@ public class NswReleaseService(SqliteDbContext dbContext) : INswReleaseService
                 Version = version
             };
             //only save valid titleId, I've seen titleIds with incomplete numbers (Last Fight)
-            if (release.ApplicationId.Length == 16 && !RegionsToExclude.Contains(release.Region)) releases.Add(release);
+            if (release.ApplicationId.Length == 16 && !configuration.Value.NswDbRegionsToExclude.Contains(release.Region)) releases.Add(release);
         }
 
         return releases;
