@@ -7,5 +7,5 @@ public class AppSettings
     public string NswDbReleasesUrl { get; init; } = string.Empty;
     public string PreferredLanguage { get; init; } = string.Empty;
     public string PreferredRegion { get; init; } = string.Empty;
-
+    public List<string> NswDbRegionsToExclude { get; init; } = [];
 }

@@ -2,18 +2,18 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using titledbConverter.Data;
 using titledbConverter.Extensions;
 using titledbConverter.Models;
 using titledbConverter.Services.Interface;
+using titledbConverter.Settings;
 using titledbConverter.Utils;
 
 namespace titledbConverter.Services;
 
-public class NswReleaseService(SqliteDbContext dbContext) : INswReleaseService
+public class NswReleaseService(SqliteDbContext dbContext, IOptions<AppSettings> configuration) : INswReleaseService
 {
- 
-    
     /// <summary>
     /// Parse the XML file and import all releases into the database
     /// </summary>
@@ -94,7 +94,12 @@ public class NswReleaseService(SqliteDbContext dbContext) : INswReleaseService
                         Firmware = GetElementValue(releaseElement, "firmware"),
                         Version = additionalTitle.Version
                     };
-                    releases.Add(releaseSameTitle);
+
+                    if (!configuration.Value.NswDbRegionsToExclude.Contains(releaseSameTitle.Region))
+                    {
+                        releases.Add(releaseSameTitle);
+                    }
+                    
                 }
                 continue;
             }
@@ -116,7 +121,7 @@ public class NswReleaseService(SqliteDbContext dbContext) : INswReleaseService
                 Version = version
             };
             //only save valid titleId, I've seen titleIds with incomplete numbers (Last Fight)
-            if (release.ApplicationId.Length == 16) releases.Add(release);
+            if (release.ApplicationId.Length == 16 && !configuration.Value.NswDbRegionsToExclude.Contains(release.Region)) releases.Add(release);
         }
 
         return releases;
