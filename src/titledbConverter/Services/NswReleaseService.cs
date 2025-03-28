@@ -13,6 +13,7 @@ namespace titledbConverter.Services;
 public class NswReleaseService(SqliteDbContext dbContext) : INswReleaseService
 {
  
+    private List<string> RegionsToExclude { get; set; }
     
     /// <summary>
     /// Parse the XML file and import all releases into the database
@@ -21,6 +22,12 @@ public class NswReleaseService(SqliteDbContext dbContext) : INswReleaseService
     /// <returns>Number of records successfully imported</returns>
     public async Task<int> ImportReleasesFromXmlAsync(string xmlFilePath, bool overwrite = false)
     {
+        RegionsToExclude =
+        [
+            "USA",
+            "WLD",
+            "EUR"
+        ];
         try
         {
             var doc = XDocument.Load(xmlFilePath);
@@ -94,7 +101,12 @@ public class NswReleaseService(SqliteDbContext dbContext) : INswReleaseService
                         Firmware = GetElementValue(releaseElement, "firmware"),
                         Version = additionalTitle.Version
                     };
-                    releases.Add(releaseSameTitle);
+
+                    if (!RegionsToExclude.Contains(releaseSameTitle.Region))
+                    {
+                        releases.Add(releaseSameTitle);
+                    }
+                    
                 }
                 continue;
             }
@@ -116,7 +128,7 @@ public class NswReleaseService(SqliteDbContext dbContext) : INswReleaseService
                 Version = version
             };
             //only save valid titleId, I've seen titleIds with incomplete numbers (Last Fight)
-            if (release.ApplicationId.Length == 16) releases.Add(release);
+            if (release.ApplicationId.Length == 16 && !RegionsToExclude.Contains(release.Region)) releases.Add(release);
         }
 
         return releases;
