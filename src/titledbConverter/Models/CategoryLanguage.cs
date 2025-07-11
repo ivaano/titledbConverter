@@ -22,5 +22,5 @@ public class CategoryLanguage
     public required string Name { get; set; }
     public int CategoryId { get; set; }
     
-    public Category Category { get; set; } = null!;
+    public Category? Category { get; set; }
 }
