@@ -34,7 +34,8 @@ public class DbInitializationService : IDbInitializationService
             if ((await _context.Database.GetPendingMigrationsAsync()).Any())
             {
                 AnsiConsole.MarkupLineInterpolated($"[bold yellow]Applying pending migrations...[/]");
-                await _context.Database.MigrateAsync();
+                await _context.Database.EnsureCreatedAsync();
+                //await _context.Database.MigrateAsync();
             }
             AnsiConsole.MarkupLineInterpolated($"[bold green]Database initialization completed successfully[/]");
         }
