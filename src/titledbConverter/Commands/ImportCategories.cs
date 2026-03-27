@@ -34,7 +34,7 @@ public class ImportCategories : AsyncCommand<ImportCategories.Settings>
         }
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
         stopwatch.Stop();

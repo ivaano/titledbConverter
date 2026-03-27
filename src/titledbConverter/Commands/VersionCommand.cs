@@ -7,7 +7,7 @@ namespace titledbConverter.Commands;
 public class VersionCommand : AsyncCommand
 {
 
-    public override Task<int> ExecuteAsync(CommandContext context)
+    public override Task<int> ExecuteAsync(CommandContext context, CancellationToken cancellationToken)
     {
         var assembly = Assembly.GetEntryAssembly(); // Or Assembly.GetCallingAssembly() in some cases
         if (assembly != null) {

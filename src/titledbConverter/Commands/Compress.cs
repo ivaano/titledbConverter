@@ -32,7 +32,7 @@ public class Compress : AsyncCommand<Compress.Settings>
         public string OutputFile { get; set; } = null!;
     }
 
-    public override Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    public override Task<int> ExecuteAsync(CommandContext context, Settings settings,  CancellationToken cancellationToken)
     {
         _compressionService.CompressFileAsync(settings.InputFile, settings.OutputFile);
         return Task.FromResult(0);

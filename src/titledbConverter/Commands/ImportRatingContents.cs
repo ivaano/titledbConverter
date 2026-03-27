@@ -34,7 +34,7 @@ public class ImportRatingContents : AsyncCommand<ImportCategories.Settings>
         }
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, ImportCategories.Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, ImportCategories.Settings settings, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
         stopwatch.Stop();
