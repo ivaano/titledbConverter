@@ -27,7 +27,7 @@ public class DbVersion : AsyncCommand<DbVersion.Settings>
         public bool Details { get; set; }
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var version = await _dbService.GetLatestHistoryAsync();
        

@@ -22,7 +22,7 @@ public class ResetDb : AsyncCommand<ResetDb.Settings>
         public bool Drop { get; set; }
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         await _dbInitService.InitializeAsync(settings.Drop);
         return 0;

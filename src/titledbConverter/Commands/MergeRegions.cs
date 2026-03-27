@@ -41,7 +41,7 @@ public sealed class MergeRegions : AsyncCommand<MergeRegions.Settings>
     }
 
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         settings.DownloadPath ??= _configuration.Value.DownloadPath;
         settings.Language ??= _configuration.Value.PreferredLanguage;

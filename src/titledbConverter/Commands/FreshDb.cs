@@ -74,7 +74,7 @@ public class FreshDb : AsyncCommand<FreshDb.Settings>
         return ValidationResult.Success();
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, FreshDb.Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, FreshDb.Settings settings, CancellationToken cancellationToken)
     {
         var titlesJson = Path.Combine(settings.DownloadPath, "titles.json");
         var dbPath = Path.Combine(settings.DownloadPath, "titledb.db");

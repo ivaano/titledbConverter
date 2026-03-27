@@ -54,7 +54,7 @@ public sealed class DownloadCommand : AsyncCommand<DownloadCommand.Settings>
     }
 
     
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var regions = await _downloadService.GetRegionsAsync(settings);
         if (regions is null) throw new InvalidOperationException("Unable to parse languages.json");
